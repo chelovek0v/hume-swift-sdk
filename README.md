@@ -23,7 +23,7 @@ Add to your `Package.swift`
 
 ```
     dependencies: [
-        .package(url: "https://github.com/HumeAI-api/hume-swift.git", from: "0.1.0")
+        .package(url: "https://github.com/HumeAI/hume-swift-sdk.git", from: "x.x.x")
     ]
 ```
 
