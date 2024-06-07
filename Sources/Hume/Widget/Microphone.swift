@@ -28,9 +28,11 @@ public class Microphone: NSObject {
             onError("Error enabling voice processing: \(error.localizedDescription)")
             return
         }
-
+        
+        
         let nativeFormat = inputNode.outputFormat(forBus: 0)
         
+
         /// We are locking format to mono PCM Int16 at the chosen sample rate. This could be changed to allow more flexibility
         desiredFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate, channels: 1, interleaved: false)
         

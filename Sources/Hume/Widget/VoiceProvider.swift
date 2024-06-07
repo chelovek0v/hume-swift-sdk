@@ -24,6 +24,8 @@ public class VoiceProvider {
             clientSecret: clientSecret
         )
         
+        VoiceProvider.configureAudioSession()
+        
         self.soundPlayer = SoundPlayer(
            onError: { error in
                print("error: \(error)")
@@ -69,12 +71,9 @@ public class VoiceProvider {
                 }
             }
         }
-        
-        configureAudioSession()
     }
     
-    
-    func configureAudioSession() {
+    private static func configureAudioSession() {
         print("Audio session configuration...")
 
         let audioSession = AVAudioSession.sharedInstance()
@@ -108,6 +107,7 @@ public class VoiceProvider {
             print("Error setting audio session active: \(error.localizedDescription)")
         }
     }
+    
 
     public func connect() async throws {
         let socket = try await self.humeClient.empatheticVoice.chat
