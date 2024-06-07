@@ -41,6 +41,12 @@ public class StreamSocket {
         webSocketTask.cancel(with: .goingAway, reason: nil)
     }
     
+    /**
+     * Send raw data (such as audio bytes)
+     */
+    public func sendData(message: Data) async throws -> Void {
+        try await sendData(message)
+    }
     
     /**
      * Send audio input
@@ -50,7 +56,7 @@ public class StreamSocket {
     }
     
     /**
-     * Send audio input
+     * Send session settings
      */
     public func sendSessionSettings(message: SessionSettings) async throws -> Void {
         try await send(message)
@@ -170,6 +176,26 @@ public class StreamSocket {
         
         do {
             try await webSocketTask.send(.string(jsonString))
+        } catch {
+            switch webSocketTask.closeCode {
+            case .invalid:
+                throw StreamSocketError.connectionError
+                
+            case .goingAway:
+                throw StreamSocketError.disconnected
+                
+            case .normalClosure:
+                throw StreamSocketError.closed
+                
+            default:
+                throw StreamSocketError.transportError
+            }
+        }
+    }
+    
+    private func sendData(_ message: Data) async throws {
+        do {
+            try await webSocketTask.send(.data(message))
         } catch {
             switch webSocketTask.closeCode {
             case .invalid:
