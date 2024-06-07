@@ -14,16 +14,17 @@ private struct Clip {
 public class SoundPlayer: NSObject, AVAudioPlayerDelegate {
     
     private let onError: (String) -> Void
-    private let onPlayAudio: (String) -> Void
     
+    /// Excluding this from init to be able to somewhat safely access self for output port overrides in VoiceProvider.
+    public var onPlayAudio: (String) -> Void = { _ in fatalError("Provide soundPlayer.onPlayAudio = { } ")}
+    
+    /// AVAudioPlayerNode has the same output port issues so I didn't think it necessary to replace here despite our input chain using AVAudioEngine
     private var audioPlayer: AVAudioPlayer?
     private var clipQueue: [Clip] = []
     private var isProcessing: Bool = false
     
-    public init(onError: @escaping (String) -> Void,
-                onPlayAudio: @escaping (String) -> Void) {
+    public init(onError: @escaping (String) -> Void) {
         self.onError = onError
-        self.onPlayAudio = onPlayAudio
     }
     
     
