@@ -48,9 +48,14 @@ public class Chat: NSObject {
         
         let url = components!.url!
         
+        var request = URLRequest(url: url)
+        
+        
+        request.addValue("swift_sdk", forHTTPHeaderField: "X-Hume-Client-Name")
+        
         
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
-        let webSocketTask = session.webSocketTask(with: url)
+        let webSocketTask = session.webSocketTask(with: request)
         
         return StreamSocket(webSocketTask: webSocketTask)
     }
