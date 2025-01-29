@@ -1,0 +1,1136 @@
+import _ from "lodash";
+import { assert } from "console";
+import * as OA from "./parse_openapi";
+import type { JsonSchema } from "./parse_openapi";
+import { camelCase } from "change-case";
+import { calculateSchemaDirections, type Direction, type Endpoint } from "./directions";
+import { calculateSchemaNamespaces, getNamespace } from "./namespaces";
+import {
+  normalizedEnumNameFromValue,
+  getMethodName,
+  swiftName,
+  getResourceName,
+  resolveNamingCollisions,
+  detectNamingCollisions,
+} from "./naming";
+import {
+  type SwiftType,
+  type SwiftStruct,
+  type SwiftDictionaryWithAccessors,
+  type SwiftEnum,
+  type SwiftDiscriminatedUnion,
+  type SwiftDefinition,
+  type SwiftCommentedOutDefinition,
+  type SwiftUndiscriminatedUnion,
+  type SDKMethodParam,
+  type SDKMethod,
+  writeSwiftSdk,
+} from "./swift";
+
+// Namespace type for type safety
+export type Namespace = "tts" | "empathicVoice";
+
+// Usage: [1, null, 3].filter(outNulls)
+const outNulls = <T>(obj: T): obj is NonNullable<T> => {
+  return Boolean(obj);
+};
+
+type Verb = "get" | "post" | "put" | "patch" | "delete";
+
+const exhaustive = (x: never): any => x;
+
+const pascalCase = (str: string): string => {
+  return str
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('');
+};
+
+/**
+ * Applies special case handling for EmotionScores schema.
+ * EmotionScores is converted to a dictionary class with named accessors
+ * instead of a regular struct.
+ */
+const applyEmotionScoresSpecialCase = (
+  schema: JsonSchema,
+  direction: Direction,
+): { expr: SwiftType; defs: Record<string, SwiftDefinition> } | null => {
+  if ((schema as any).schemaKey !== "evi:EmotionScores") {
+    return null;
+  }
+
+  const name = "EmotionScores";
+
+  // Extract emotion properties from the actual schema definition
+  const emotionProperties: Array<{ propertyName: string; keyName: string }> = [];
+
+  if (schema.kind === "object" && schema.properties) {
+    // Convert property names from the API spec to camelCase Swift property names
+    Object.entries(schema.properties).forEach(([keyName, _propSchema]) => {
+      // Convert key name to camelCase property name
+      let propertyName = keyName
+        .toLowerCase()
+        .replace(/\s+([a-z])/g, (_, letter) => letter.toUpperCase())
+        .replace(/[^a-zA-Z0-9]/g, "");
+
+      // Handle special cases for surprise properties
+      if (keyName === "Surprise (negative)") {
+        propertyName = "surpriseNegative";
+      } else if (keyName === "Surprise (positive)") {
+        propertyName = "surprisePositive";
+      }
+
+      emotionProperties.push({ propertyName, keyName });
+    });
+  }
+
+  // Create a dictionary with accessors definition
+  const dictAccessorsDef: SwiftDictionaryWithAccessors = {
+    type: "dictionaryWithAccessors",
+    name,
+    properties: emotionProperties.map((prop) => ({
+      name: prop.propertyName,
+      type: { type: "Double" } as SwiftType,
+      keyName: prop.keyName,
+    })),
+    direction: direction,
+  };
+
+  // Change the schema kind to prevent regular object processing
+  (schema as any).kind = "dictionary";
+
+  // Return reference to the dictionary with accessors instead of dictionary type
+  return {
+    expr: { type: "Reference", name },
+    defs: { [name]: dictAccessorsDef },
+  };
+};
+
+/**
+ * This `Back` infrastructure is for keeping track of where you came from as you traverse a schema.
+ * This is needed: suppose you have an object like
+ *
+ * Foo {
+ *   bar: {
+ *     baz: ['a' | 'b' | 'c']
+ *   }
+ * }
+ *
+ * This will need a Swift enum like
+ * enum Baz {
+ *   case a
+ *   case b
+ *   case c
+ * }
+ * but how do we know the enum should be called `Baz`? We need to know that
+ * we're inside an array that is inside property called `baz`. So we need to
+ * a trail "back" into outer schemas in order to ask questions like this.
+ */
+type Back<T, TStep> = {
+  /** to is the schema we are pointing back *to* e.g. the outer schema that surrounds us */
+  to: T;
+  /** step is *how* `to` surrounds us. Are we a property inside an object? Are we an element inside an array? */
+  step: TStep;
+  /** back is the rest of the trail, back from `to`. null if we are at the root */
+  back: Back<T, TStep> | null;
+};
+
+type Step =
+  | {
+    kind: "property";
+    name: string;
+    parentSchemaName?: string;
+  }
+  | {
+    kind: "nullable";
+  }
+  | {
+    kind: "variant";
+    i: number;
+  }
+  | {
+    kind: "array";
+  };
+
+const surroundingPropertyName = (back: Back<JsonSchema, Step> | null): string | undefined => {
+  if (!back) return undefined;
+  if (back.step.kind === "property") {
+    return back.step.name;
+  }
+  return surroundingPropertyName(back.back);
+};
+
+const surroundingSchemaName = (back: Back<JsonSchema, Step> | null): string | undefined => {
+  if (!back) return undefined;
+
+  // If we're at a property step with a parent schema name, use it
+  if (back.step.kind === "property" && back.step.parentSchemaName) {
+    return back.step.parentSchemaName;
+  }
+
+  // Otherwise, traverse the back chain looking for a named schema
+  let currentBack: Back<JsonSchema, Step> | null = back;
+  while (currentBack) {
+    const schema = currentBack.to;
+    if (schema.kind === "object" || schema.kind === "discriminatedUnion" || schema.kind === "enum") {
+      const schemaName = (schema as any)["x-fern-type-name"] || (schema as any).schemaKey || (schema as any).title;
+      if (schemaName) {
+        return schemaName;
+      }
+    }
+    currentBack = currentBack.back;
+  }
+
+  return undefined;
+};
+
+
+
+const parseDiscriminatedUnionFromAnyOfRefs = (
+  schema: JsonSchema & { kind: "anyOfRefs" },
+  back: Back<JsonSchema, Step> | null,
+  lookupSchema: (name: string, namespace: Namespace) => JsonSchema | null,
+  recurse: (
+    schema: JsonSchema,
+    step: Step,
+  ) => ReturnType<typeof schemaToSwiftType>,
+  direction: Direction,
+  currentNamespace: Namespace,
+): ReturnType<typeof schemaToSwiftType> | null => {
+  const variants = schema.anyOf.map((ref, i) => {
+    const resolvedSchema = resolveIfRef(ref, lookupSchema, currentNamespace);
+    return recurse(resolvedSchema, { kind: "variant", i });
+  });
+  const variantDefsByName = variants.reduce(
+    (acc, r) => {
+      Object.assign(acc, r.defs);
+      return acc;
+    },
+    {} as Record<string, SwiftDefinition>,
+  );
+
+  const structVariantsByName: Record<string, SwiftStruct> = {};
+
+  for (const [name, def] of Object.entries(variantDefsByName)) {
+    if (def.type === "struct") {
+      structVariantsByName[name] = def;
+    } else {
+      return null;
+    }
+  }
+  if (Object.keys(structVariantsByName).length === 0) {
+    return null;
+  }
+
+  const isConst = (p: SwiftStruct["properties"][number]): boolean => {
+    return p.type.type === "String" && !!p.constValue;
+  };
+  let names = Object.values(structVariantsByName)[0].properties.map(
+    (p) => p.name,
+  );
+
+  for (const struct of Object.values(structVariantsByName)) {
+    names = names.filter((n) =>
+      struct.properties.some((p) => p.name === n && isConst(p)),
+    );
+  }
+
+  if (names.length !== 1) {
+    return null;
+  }
+  const cases = Object.entries(variantDefsByName).map(
+    ([name, def]): SwiftDiscriminatedUnion["cases"][number] => ({
+      type: {
+        type: "Reference",
+        name: def.name,
+      },
+      caseName: camelCase(variantDefsByName[name].name),
+      discriminatorValue: structVariantsByName[name].properties.find(
+        (p) => p.name === names[0],
+      )!.constValue!,
+    }),
+  );
+
+  // Create discriminator values array for the union
+  const discriminatorValuesArray = cases
+    .filter((c) => c.discriminatorValue)
+    .map((c) => ({ caseName: c.caseName, value: c.discriminatorValue! }));
+
+  // Combine parent schema name and property name for inline schemas
+  const schemaName = surroundingSchemaName(back);
+  const propertyName = surroundingPropertyName(back);
+  let typeName: string | undefined = undefined;
+  if (schemaName && propertyName) {
+    typeName = pascalCase(schemaName) + pascalCase(propertyName);
+  } else if (propertyName) {
+    typeName = pascalCase(propertyName);
+  } else if (schemaName) {
+    typeName = pascalCase(schemaName);
+  }
+
+  const discriminatedUnion: SwiftDiscriminatedUnion = {
+    type: "discriminatedUnion",
+    name: swiftName(
+      schema,
+      schema.schemaKey ??
+      typeName ??
+      "TODO_DISCRIMINATED_UNION",
+    ),
+    discriminator: names[0],
+    cases: cases.map((c) => ({ caseName: c.caseName, type: c.type })),
+    discriminatorValues:
+      discriminatorValuesArray.length > 0
+        ? discriminatorValuesArray
+        : undefined,
+    direction: direction,
+  };
+  return {
+    expr: {
+      type: "Reference",
+      name: discriminatedUnion.name,
+    },
+    defs: {
+      [discriminatedUnion.name]: discriminatedUnion,
+    },
+  };
+};
+/**
+ * Takes a JsonSchema and converts it to a SwiftType `expr`.
+ * If the schema is a reference or contains references to
+ * types that translate to enums or structs, it will recurse
+ * appropriately and these definitions will wind up in `defs`.
+ */
+const schemaToSwiftType = (
+  schema: JsonSchema,
+  lookupSchema: (name: string, namespace: Namespace) => JsonSchema | null,
+  back: null | Back<JsonSchema, Step> = null,
+  direction: Direction,
+  currentNamespace: Namespace,
+): { expr: SwiftType; defs: Record<string, SwiftDefinition> } => {
+  const recurse = (
+    schema: JsonSchema,
+    step: Step,
+  ): ReturnType<typeof schemaToSwiftType> => {
+    return schemaToSwiftType(
+      schema,
+      lookupSchema,
+      {
+        step,
+        to: schema,
+        back,
+      },
+      direction,
+      currentNamespace,
+    );
+  };
+  const result = (
+    expr: SwiftType,
+    defs: Record<string, SwiftDefinition> = {},
+  ) => ({
+    expr,
+    defs,
+  });
+  const todo = (message: string) => result({ type: "TODO", message });
+
+
+  // Apply special case handling for EmotionScores
+  const emotionScoresResult = applyEmotionScoresSpecialCase(schema, direction);
+  if (emotionScoresResult) {
+    return result(emotionScoresResult.expr, emotionScoresResult.defs);
+  }
+
+  switch (schema.kind) {
+    case "ignored": {
+      throw new Error();
+    }
+    case "empty":
+    case "inheritance":
+      return todo("inheritance not supported yet");
+    case "anyOfRefs": {
+      // Try discriminated union first, then fall back to undiscriminated union
+      const discriminatedUnionResult = parseDiscriminatedUnionFromAnyOfRefs(
+        schema,
+        back,
+        lookupSchema,
+        recurse,
+        direction,
+        currentNamespace,
+      );
+      if (discriminatedUnionResult) {
+        return discriminatedUnionResult;
+      }
+
+      // Fallback to undiscriminated union attempt
+      const schemaName = surroundingSchemaName(back);
+      const propertyName = surroundingPropertyName(back);
+
+      // Combine parent schema name and property name for inline schemas
+      let typeName: string | undefined = undefined;
+      if (schemaName && propertyName) {
+        typeName = pascalCase(schemaName) + pascalCase(propertyName);
+      } else if (propertyName) {
+        typeName = pascalCase(propertyName);
+      } else if (schemaName) {
+        typeName = pascalCase(schemaName);
+      }
+
+      // Check if this should be treated as an undiscriminated union
+      // This happens when the schema has x-fern-type-name and the refs don't share a discriminator
+      const unionName = swiftName(schema, typeName);
+      if (unionName) {
+        // Try to create an undiscriminated union
+        const variants = schema.anyOf.map((ref, i) => {
+          const resolvedSchema = resolveIfRef(ref, lookupSchema, currentNamespace);
+          return recurse(resolvedSchema, { kind: "variant", i });
+        });
+
+        const variantDefsByName = variants.reduce(
+          (acc, r) => {
+            Object.assign(acc, r.defs);
+            return acc;
+          },
+          {} as Record<string, SwiftDefinition>,
+        );
+
+        const cases: Array<{
+          caseName: string;
+          type: SwiftType;
+        }> = [];
+
+        // Create cases for each variant
+        for (const [name, def] of Object.entries(variantDefsByName)) {
+          if (def.type === "struct") {
+            cases.push({
+              caseName: name,
+              type: { type: "Reference", name: def.name },
+            });
+          }
+        }
+
+        if (cases.length > 0) {
+          const unionDef: SwiftUndiscriminatedUnion = {
+            type: "undiscriminatedUnion",
+            name: unionName,
+            variants: cases.map(c => c.type),
+            direction: direction,
+          };
+
+          return result(
+            { type: "Reference", name: unionName },
+            { [unionName]: unionDef },
+          );
+        }
+      }
+
+      return todo("unsupported anyOfRefs");
+    }
+
+    case "ref":
+      const lookedUp = lookupSchemaRef(schema.$ref, lookupSchema, currentNamespace);
+      return {
+        expr: { type: "Reference", name: swiftName(lookedUp) },
+        defs: {},
+      };
+    case "nullableRef": {
+      const { expr, defs } = recurse(
+        schema.anyOf[0],
+        { kind: "variant", i: 0 },
+      );
+      return result({ type: "Optional", wrapped: expr }, defs);
+    }
+  }
+
+  if ("nullable" in schema && schema.nullable) {
+    const { expr, defs } = recurse(
+      { ...schema, nullable: false },
+      { kind: "nullable" },
+    );
+    return result({ type: "Optional", wrapped: expr }, defs);
+  }
+
+  switch (schema.kind) {
+    case "discriminatedUnion": {
+      const unionName = swiftName(schema);
+      const discriminator = schema.discriminator;
+      const defs = {};
+      const cases: Array<{
+        caseName: string;
+        type: SwiftType;
+        discriminatorValue?: string;
+      }> = [];
+
+      // Extract discriminator values from the mapping if available
+      const discriminatorMapping = discriminator.mapping || {};
+
+      schema.oneOf.forEach((option, i) => {
+        const todoCase = (
+          message: string,
+        ): SwiftDiscriminatedUnion["cases"][number] => ({
+          type: todo(message).expr,
+          caseName: "todo",
+        });
+
+        // Handle references by resolving them first
+        let resolvedOption = option;
+        if (option.kind === "ref") {
+          resolvedOption = resolveIfRef(option, lookupSchema, currentNamespace);
+        }
+
+        if (resolvedOption.kind !== "object") {
+          cases.push(
+            todoCase("Unexpected: non-object inside discriminated union oneOf"),
+          );
+          return;
+        }
+
+        // Now we know resolvedOption is an object schema
+        const objectOption = resolvedOption as JsonSchema & { kind: "object" };
+
+        // Try to determine case name from discriminator mapping first
+        let caseName: string;
+        let discriminatorValue: string | undefined;
+
+        // Try to find the mapping key that corresponds to this option
+        // The discriminator mapping is { discriminatorValue: schemaReference }
+        const mappingEntries = Object.entries(discriminatorMapping);
+        const mappingEntry = mappingEntries[i];
+
+        if (mappingEntry) {
+          const [key, _schemaRef] = mappingEntry;
+          discriminatorValue = key;
+          caseName = camelCase(key); // Convert discriminator value to camelCase
+        } else if (objectOption.title) {
+          caseName = camelCase(objectOption.title);
+        } else if (objectOption.schemaKey) {
+          caseName = camelCase(objectOption.schemaKey);
+        } else if (
+          objectOption.properties &&
+          objectOption.properties.type &&
+          objectOption.properties.type.kind === "const"
+        ) {
+          // Extract case name from the const value in the type property
+          caseName = camelCase(objectOption.properties.type.value);
+          discriminatorValue = objectOption.properties.type.value;
+        } else {
+          // Fallback to using the index
+          caseName = `case${i}`;
+        }
+
+        const { expr, defs: theseDefs } = recurse(objectOption, {
+          kind: "variant",
+          i,
+        });
+        Object.assign(defs, theseDefs);
+        cases.push({ caseName, type: expr, discriminatorValue });
+
+
+      });
+
+      // Create discriminator values array for the union
+      const discriminatorValuesArray = cases
+        .filter((c) => c.discriminatorValue)
+        .map((c) => ({ caseName: c.caseName, value: c.discriminatorValue! }));
+
+      const unionDef: SwiftDiscriminatedUnion = {
+        type: "discriminatedUnion",
+        name: unionName,
+        discriminator: discriminator.propertyName,
+        cases: cases.map((c) => ({ caseName: c.caseName, type: c.type })),
+        discriminatorValues:
+          discriminatorValuesArray.length > 0
+            ? discriminatorValuesArray
+            : undefined,
+        direction: direction,
+      };
+
+
+
+      return result(
+        { type: "Reference", name: unionName },
+        { [unionName]: unionDef },
+      );
+    }
+    case "anyOfDiscriminatedUnion":
+      return todo("anyOfDiscriminatedUnion not supported yet");
+    case "anyOfUndiscriminatedUnion":
+      console.log("DEBUG: anyOfUndiscriminatedUnion case reached in generator.ts line 463");
+      return todo("anyOfUndiscriminatedUnion not supported yet");
+    case "oneOfUndiscriminatedUnion":
+      return todo("oneOfUndiscriminatedUnion not supported yet");
+    case "singletonOrArray":
+      return todo("singletonOrArray not supported yet");
+    case "metadataObject":
+      return todo("metadataObject not supported yet");
+    case "enum": {
+      const enumName = swiftName(schema, surroundingPropertyName(back)!);
+      if (!enumName) {
+        // Just throw in this case, hopefully we can avoid it.
+        // If it ever surfaces in a way where there is no name, we should either override the
+        // api spec to add a title (ideal), or default to 'string'.
+        throw new Error(`Could not calculate name for enum`);
+      }
+      const members = schema.enum.map(
+        (value) =>
+          [normalizedEnumNameFromValue(value, enumName), value] as [
+            string,
+            string,
+          ],
+      );
+      const enumDef: SwiftEnum = {
+        type: "enum",
+        name: enumName,
+        members,
+        direction: direction,
+      };
+      return result(
+        { type: "Reference", name: enumName },
+        { [enumName]: enumDef },
+      );
+    }
+    case "primitive": {
+      switch (schema.type) {
+        case "string":
+          return result({ type: "String" });
+        case "number":
+          return result({ type: "Double" });
+        case "integer":
+          return result({ type: "Int" });
+        case "boolean":
+          return result({ type: "Bool" });
+        case "null":
+          throw new Error('Unsupported: null primitive cannot be rendered right now')
+      }
+    }
+    case "const": {
+      return result({ type: "String" });
+    }
+    case "stringOrInteger":
+      return todo("stringOrInteger not implemented yet");
+    case "stringNumberBool":
+      return todo("stringNumberBool not implemented yet");
+    case "object": {
+      const name = swiftName(schema);
+
+      const defs: Record<string, SwiftDefinition> = {};
+      const rawProperties: Array<{
+        name: string;
+        type: SwiftType;
+        constValue?: string;
+        isCommentedOut?: boolean;
+      }> = Object.entries(schema.properties)
+        .map(
+          ([propName, prop]): {
+            name: string;
+            type: SwiftType;
+            constValue?: string;
+            isCommentedOut?: boolean;
+          } | null => {
+            if (propName == 'prosody') {
+              console.log(prop)
+            }
+            if (prop.kind === "ignored") {
+              return null;
+            }
+
+            const resolved = resolveIfRef(prop, lookupSchema, currentNamespace);
+            if (!resolved) {
+              return null;
+            }
+            let { expr: type, defs: propertyDefs } = recurse(prop, {
+              kind: "property",
+              name: propName,
+              parentSchemaName: name,
+            });
+            Object.assign(defs, propertyDefs);
+
+            const isRequired = schema.required.includes(propName);
+
+            let constValue: string | undefined;
+            if (resolved.kind === "const") {
+              constValue = resolved.value;
+            }
+
+            // If the property is not required, or if the underlying schema is nullable,
+            // model it as an optional Swift type.
+            if (!isRequired || ("nullable" in resolved && resolved.nullable)) {
+              if (type.type !== "Optional") {
+                type = { type: "Optional" as const, wrapped: type };
+              }
+            }
+
+            const isCommentedOut = type.type === "TODO";
+            return { name: camelCase(propName), type, constValue, isCommentedOut };
+          },
+        )
+        .filter(outNulls);
+
+      // Instead of filtering out TODO properties, keep them for commented-out rendering
+      const properties = rawProperties;
+      const struct: SwiftStruct = {
+        type: "struct",
+        name,
+        properties,
+        direction: direction,
+      };
+      defs[name] = struct;
+      return result({ type: "Reference", name: struct.name }, defs);
+    }
+    case "array": {
+      const { expr: element, defs } = recurse(schema.items, { kind: "array" });
+      return result({ type: "Array", element }, defs);
+    }
+    case "dictionary": {
+      const { expr: valueType, defs } = recurse(schema.additionalProperties, { kind: "array" });
+      return result({ type: "Dictionary", key: { type: "String" }, value: valueType }, defs);
+    }
+  }
+  return exhaustive(schema);
+};
+
+const lookupSchemaRef = (
+  ref: string,
+  lookupSchema: (name: string, namespace: Namespace) => JsonSchema | null,
+  currentNamespace: Namespace,
+): JsonSchema => {
+  if (ref.startsWith("#/components/schemas/")) {
+    const key = ref.replace(/^#\/components\/schemas\//, "");
+    const schema = lookupSchema(key, currentNamespace);
+    if (schema) {
+      return schema;
+    }
+    throw new Error(`Unknown ref: ${ref}`);
+  }
+  throw new Error(`Unknown ref: ${ref}`);
+};
+
+const resolveIfRef = (
+  schema: JsonSchema,
+  lookupSchema: (name: string, namespace: Namespace) => JsonSchema | null,
+  currentNamespace: Namespace,
+): JsonSchema => {
+  if (!schema) {
+    // Return a placeholder schema to prevent crashes
+    return { kind: "ignored" };
+  }
+
+  if (schema.kind === "ref") {
+    return lookupSchemaRef(schema.$ref, lookupSchema, currentNamespace);
+  }
+  return schema;
+};
+
+const openapiOperationToSDKMethod = (
+  path: string,
+  verb: Verb,
+  op: OA.OpenAPIOperation,
+  lookupSchema: (name: string, namespace: Namespace) => JsonSchema | null,
+  namespace: Namespace,
+): SDKMethod | null => {
+  if (op.kind === "ignored") {
+    return null;
+  }
+  const specParameters = op.parameters ?? [];
+  const sdkParameters: Array<SDKMethodParam> = [];
+  sdkParameters.push(
+    ...specParameters
+      .filter((p) => p.in === "path")
+      .map((p) => p.name)
+      .map(
+        (name): SDKMethodParam => ({
+          name,
+          type: { type: "String" },
+          in: "path",
+        }),
+      ),
+  );
+
+  sdkParameters.push(
+    ...specParameters
+      .filter((p) => p.in === "query")
+      // TODO: these are unwanted query parameters that should probably be removed via override from the spec
+      // just filter them out via this bespoke filter for now
+      .filter((p) => p.name !== "post_usage" && p.name !== "access_token")
+      .map((p): SDKMethodParam => {
+        const { expr } = schemaToSwiftType(p.schema, lookupSchema, null, "sent", namespace);
+        let type = expr;
+        if (!p.required) type = { type: "Optional", wrapped: type };
+        console.log(p.name)
+        return { name: p.name, type, in: "query" };
+      }),
+  );
+
+  if (op.kind === "jsonBody") {
+    const bodySchema = op.requestBody.content["application/json"].schema;
+    const bodyStructName = swiftName(resolveIfRef(bodySchema, lookupSchema, namespace));
+    sdkParameters.push({
+      name: "request",
+      type: { type: "Reference", name: bodyStructName },
+      in: "body",
+    });
+  }
+
+  const maybeSchemaOfStatus = (code: string): JsonSchema | null => {
+    const response = op?.responses?.[code];
+    if (!response) {
+      return null;
+    }
+    if (response.kind === "jsonResponse") {
+      return response.content["application/json"].schema;
+    }
+    if (response.kind === "binaryResponse") {
+      return response.content["audio/*"].schema;
+    }
+    return null;
+  };
+
+  const isBinaryResponse = (code: string): boolean => {
+    const response = op?.responses?.[code];
+    return !!response && response.kind === "binaryResponse";
+  };
+  const successResponseSchema =
+    maybeSchemaOfStatus("200") ??
+    maybeSchemaOfStatus("201") ??
+    maybeSchemaOfStatus("204");
+
+  let returnType: SwiftType;
+  if (isBinaryResponse("200") || isBinaryResponse("201")) {
+    returnType = { type: "Data" };
+  } else {
+    const { expr } = successResponseSchema
+      ? schemaToSwiftType(successResponseSchema, lookupSchema, null, "received", namespace)
+      : { expr: { type: "void" as const } };
+    returnType = expr;
+  }
+
+  return {
+    name: getMethodName(op),
+    path,
+    verb,
+    parameters: sdkParameters,
+    returnType,
+  };
+};
+
+export type SwiftSDK = {
+  namespaces: Record<
+    string,
+    {
+      resourceClients: Array<{
+        name: string;
+        methods: SDKMethod[];
+      }>;
+      definitions: Array<SwiftDefinition>;
+    }
+  >;
+};
+
+/**
+ * This defines the overall flow of how OpenAPI and AsyncAPI are converted into a Swift SDK "in the large".
+ * 
+ * This is mostly data munging, and the actual granular logic for how individual schemas and endpoints 
+ * become Swift types and Swift methods are contained in `schemaToSwiftType` and the more granular detail `openapiOperationToSDKMethod`.
+ */
+const buildSwiftSdk = (specs: OA.KnownSpecs): SwiftSDK => {
+  const sdk: SwiftSDK = {
+    namespaces: {},
+  };
+  const emptyNamespace = () => ({
+    resourceClients: [],
+    definitions: [],
+    extensions: [],
+  });
+  const ensureNamespace = (namespace: Namespace) => {
+    const namespaceStr = namespace === "empathicVoice" ? "empathicVoice" : "tts";
+    if (!sdk.namespaces[namespaceStr]) {
+      sdk.namespaces[namespaceStr] = emptyNamespace();
+    }
+  };
+
+  // ==== HELPERS ====
+
+  // Helper to add a "resource client" which contains SDK methods (REST methods)
+  const addResourceClient = (
+    namespace: Namespace,
+    resourceName: string,
+    methods: SDKMethod[],
+  ) => {
+    ensureNamespace(namespace);
+    const namespaceStr = namespace === "empathicVoice" ? "empathicVoice" : "tts";
+    sdk.namespaces[namespaceStr].resourceClients.push({
+      name: resourceName,
+      methods,
+    });
+  };
+
+  // Helper to add "definitions" which are Swift structs and enums that represent structures
+  // used in requests, responses, and Websocket messages.
+  const addDefinition = (namespace: Namespace, def: SwiftDefinition) => {
+    ensureNamespace(namespace);
+    const namespaceStr = namespace === "empathicVoice" ? "empathicVoice" : "tts";
+    // Prevent adding a struct if a typeAlias with the same name already exists
+    if (def.type === "struct") {
+      const hasTypeAlias = sdk.namespaces[namespaceStr].definitions.some(
+        (d) => d.name === def.name && d.type === "typeAlias",
+      );
+      if (hasTypeAlias) {
+        // Skip adding this struct
+        return;
+      }
+    }
+    sdk.namespaces[namespaceStr].definitions.push(def);
+  };
+
+  // ==== MAIN LOGIC: Step 1: Collection ====
+
+  // First we collect everything: endpoints, schemas, and messages
+
+  const allEndpoints: Array<Endpoint> = [specs.tts]
+    .flatMap((api) => {
+      const pathEntries = Object.entries(api.paths);
+      return pathEntries.flatMap(
+        ([path, operations]: [string, Record<Verb, OA.OpenAPIOperation>]) =>
+          Object.entries(operations).map(([verb, operation]) => ({
+            path,
+            verb: verb as Verb,
+            operation,
+            namespace: getNamespace(path),
+          })),
+      );
+    })
+    .filter(({ operation }) => operation.kind !== "ignored")
+    // The swift SDK is a "client-only" SDK, so it should only include endpoints that are appropriate to call from
+    // the client-side.
+    //
+    // One way to determine this is whether or not the endpoint supports "access token" authentication (not just api key authentication)
+    // but it's more straightforward for now to just exclude the voices endpoints (which are the only non-access-token REST endpoints under /v0tts)
+    // and we also don't include the evi-openapi spec (which has all the resources like /v0/evi/configs and /v0/evi/tools which are non-access-token)
+    // and only include the evi-asyncapi spec (which has the access-token-accessible /v0/evi/chat websocket)
+    .filter(({ path }) => !path.startsWith("/v0/tts/voices"));
+
+  const collectedByResourceName: Record<string, Array<Endpoint>> = _.groupBy(
+    allEndpoints,
+    getResourceName,
+  );
+
+  const allSchemas: Record<string, JsonSchema> = {};
+
+  // Add TTS schemas with tts: prefix
+  for (const [key, schema] of Object.entries(specs.tts.components.schemas)) {
+    const prefixedKey = `tts:${key}`;
+    allSchemas[prefixedKey] = schema;
+    // Update the schemaKey to maintain traceability
+    (schema as any).schemaKey = prefixedKey;
+  }
+
+  // Add EVI AsyncAPI schemas with evi: prefix
+  for (const [key, schema] of Object.entries(
+    specs.eviAsync.components.schemas,
+  )) {
+    const prefixedKey = `evi:${key}`;
+    allSchemas[prefixedKey] = schema;
+    // Update the schemaKey to maintain traceability
+    (schema as any).schemaKey = prefixedKey;
+  }
+
+  // Create a lookup function that handles special cases and renames
+  const lookupSchema = (name: string, namespace: Namespace): JsonSchema | null => {
+    const namespacedKey = `${namespace === "empathicVoice" ? "evi" : "tts"}:${name}`;
+    if (allSchemas[namespacedKey]) {
+      return allSchemas[namespacedKey];
+    }
+    return null;
+  };
+
+  const methodsByResourceName = Object.entries(collectedByResourceName).map(
+    ([resourceName, endpoints]) => {
+      if (endpoints.length === 0) {
+        throw new Error(`No endpoints for resource ${resourceName}`);
+      }
+      const namespace = endpoints[0].namespace;
+      assert(
+        endpoints.every((x) => namespace === x.namespace),
+        `Expected all endpoints to have the same namespace`,
+      );
+      const methods = endpoints
+        .map(({ path, verb, operation }) =>
+          openapiOperationToSDKMethod(
+            path,
+            verb,
+            operation as OA.OpenAPIOperation,
+            lookupSchema,
+            namespace,
+          ),
+        )
+        .filter(outNulls);
+      return { namespace, resourceName, methods };
+    },
+  );
+
+  methodsByResourceName.forEach(
+    ({ namespace, resourceName: groupName, methods }) => {
+      addResourceClient(namespace, groupName, methods);
+    },
+  );
+
+  // ==== MAIN LOGIC: Step 2: Namespaces and Direction ====
+  // We make sure to keep `tts` and `empathicVoice` separate, depending on which spec
+  // the schemas and endpoints originate from.
+
+  // We also calculate the "direction" of each schema, which captures whether it is
+  // "sent" (i.e. used in) *requests* or *published websocket messages*, or "received" (i.e. used in
+  // *responses* or *received websocket messages*.
+
+  const schemaToNamespace = calculateSchemaNamespaces(
+    allEndpoints,
+    specs.eviAsync.channels,
+    specs.eviAsync.components.messages,
+  );
+
+  const schemaToDirection = calculateSchemaDirections(
+    allEndpoints,
+    specs.eviAsync.channels,
+    specs.eviAsync.components.messages,
+    allSchemas,
+  );
+
+  // Set namespace for all prefixed schemas
+  for (const schemaKey in specs.eviAsync.components.schemas) {
+    schemaToNamespace.set(`evi:${schemaKey}`, "empathicVoice");
+  }
+
+  for (const schemaKey in specs.tts.components.schemas) {
+    schemaToNamespace.set(`tts:${schemaKey}`, "tts");
+  }
+
+  // ==== MAIN LOGIC: Step 3: Definitions ====
+  // We now walk through all the schemas and add them to the SDK as definitions.
+  // We also add any special cases (like EmotionScores) as definitions.
+
+  Object.entries(allSchemas).forEach(([name, schema]) => {
+    if (schema.kind === "ignored") {
+      return;
+    }
+
+    const schemaKey = (schema as any).schemaKey;
+
+    // Skip schemas without schemaKey (these are typically internal schemas not meant for generation)
+    if (schemaKey === undefined) {
+      return;
+    }
+
+    const namespace = schemaToNamespace.get(schemaKey);
+    const direction = schemaToDirection.get(schemaKey);
+
+    // Skip processing if no namespace was determined
+    if (!namespace) {
+      console.warn(`Warning: No namespace determined for schema ${schemaKey}, skipping`);
+      return;
+    }
+
+    // Skip processing if no direction was determined (this should not happen with proper reference graph)
+    if (!direction) {
+      console.warn(`Warning: No direction determined for schema ${schemaKey}, skipping`);
+      return;
+    }
+
+    // Skip orphaned schemas (schemas that are not referenced by any endpoints)
+    if (direction === "orphaned") {
+      return;
+    }
+
+    const { expr, defs } = schemaToSwiftType(
+      schema,
+      lookupSchema,
+      null,
+      direction,
+      namespace,
+    );
+
+    if (expr.type === "TODO") {
+      // Create a commented-out definition instead of skipping
+      const name = swiftName(schema);
+      if (name && namespace) {
+        const commentedOutDef: SwiftCommentedOutDefinition = {
+          type: "commentedOut",
+          name: name,
+          reason: expr.message,
+          direction: direction,
+        };
+        addDefinition(namespace, commentedOutDef);
+      }
+      return;
+    }
+
+    if (Object.keys(defs).length === 0) {
+      throw new Error();
+    }
+
+    if (!namespace) {
+      // Special case: skip webhook-related schemas silently
+      if (
+        name.toLowerCase().includes("webhook") ||
+        name.toLowerCase().includes("webhookevent")
+      ) {
+        return;
+      }
+
+      return;
+    }
+
+    Object.values(defs).forEach((def) => {
+      addDefinition(namespace, def);
+    });
+  });
+
+  return sdk;
+};
+
+const main = async () => {
+  // Parse command line arguments
+  const args = process.argv.slice(2);
+  let basePath = __dirname + "/.."; // Default to ../
+
+  // Check for help flag
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(`Usage: bun run generator.ts [--target-dir <path>]
+    
+Options:
+  --target-dir <path>  Base directory for generated files (default: ../)
+                       Files will be generated to <path>/Sources/Hume
+  --help, -h           Show this help message
+  
+Examples:
+  bun run generator.ts                    # Generate to ../Sources/Hume
+  bun run generator.ts --target-dir ../.. # Generate to ../../Sources/Hume`);
+    return;
+  }
+
+  // Look for --target-dir argument
+  const targetDirIndex = args.indexOf("--target-dir");
+  if (targetDirIndex !== -1 && targetDirIndex + 1 < args.length) {
+    basePath = args[targetDirIndex + 1];
+  }
+
+  console.log(`Generating Swift SDK to: ${basePath}/Sources/Hume`);
+
+  const specs = await OA.readKnownSpecs();
+  // normalizeSpecs(specs);
+  const sdk = buildSwiftSdk(specs);
+  detectNamingCollisions(sdk);
+
+  // Apply renames to resolve collisions
+  const renamedSdk = resolveNamingCollisions(sdk);
+
+  // Verify that collisions are resolved
+  detectNamingCollisions(renamedSdk);
+
+  const stats = await writeSwiftSdk(renamedSdk, basePath);
+
+  console.log(`\nFile generation statistics:`);
+  console.log(`  Total files written: ${stats.totalFiles}`);
+  console.log(`  New files: ${stats.newFiles}`);
+  console.log(`  Replaced files: ${stats.replacedFiles}`);
+  console.log(`  Deleted files: ${stats.deletedFiles}`);
+};
+
+await main();
