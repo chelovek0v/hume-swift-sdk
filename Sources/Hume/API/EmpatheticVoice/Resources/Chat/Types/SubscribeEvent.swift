@@ -25,10 +25,36 @@ public enum SubscribeEvent: Decodable {
         case type
     }
     
+    var debugName: String {
+        switch self {
+        case .assistantEnd:
+            return "assistant_end"
+        case .assistantMessage:
+            return "assistant_message"
+        case .audioOutput:
+            return "audio_output"
+        case .chatMetadata:
+            return "chat_metadata"
+        case .webSocketError:
+            return "web_socket_error"
+        case .userInterruption:
+            return "user_interruption"
+        case .userMessage:
+            return "user_message"
+        case .toolCallMessage:
+            return "tool_call"
+        case .toolResponseMessage:
+            return "tool_response"
+        case .toolErrorMessage:
+            return "tool_error"
+        }
+    }
+    
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(String.self, forKey: .type)
+        Logger.debug("Decoding event of type=\(type)")
 
         switch type {
         case "assistant_end":

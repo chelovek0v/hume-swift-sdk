@@ -11,7 +11,7 @@ import Foundation
 public class EmpatheticVoice {
     
     private let options: HumeClient.Options
-    
+
     init(options: HumeClient.Options) {
         self.options = options
     }

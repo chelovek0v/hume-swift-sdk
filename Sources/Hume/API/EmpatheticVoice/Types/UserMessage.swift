@@ -15,4 +15,5 @@ public struct UserMessage: Codable {
     public let customSessionId: String?
     public let time: MillisecondInterval
     public let type: String
+    public let interim: Bool
 }

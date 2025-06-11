@@ -12,6 +12,7 @@ public struct AudioOutput: Codable {
     public let customSessionId: String?
     /** Base64 encoded audio output. */
     public let data: String
+    public let index: Int
     /** ID of the audio output. */
     public let id: String
     public let type: String
@@ -19,7 +20,7 @@ public struct AudioOutput: Codable {
     
     /// Attempts to decode the base64 encoded `data` attributed into
     /// a `Data` type that can be played.
-    public var base64ToData: Data? {
+    public var asBase64EncodedData: Data? {
         get { Data(base64Encoded: data) }
     }
 }

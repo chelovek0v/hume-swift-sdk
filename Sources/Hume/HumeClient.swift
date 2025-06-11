@@ -9,18 +9,15 @@ import Foundation
 
 
 public class HumeClient {
-    
-    struct Options {
-        let apiKey: String
-        let clientSecret: String
+    public enum Options {
+        case apiKey(apiKey: String, clientSecret: String)
+        case accessToken(tokenProvider: () async throws -> String)
     }
     
     private let options: HumeClient.Options
-    
-    public init(apiKey: String, clientSecret: String) {
-        self.options = HumeClient.Options(
-            apiKey: apiKey,
-            clientSecret: clientSecret)
+
+    public init(options: Options) {
+        self.options = options
     }
     
     public lazy var empatheticVoice: EmpatheticVoice = {
