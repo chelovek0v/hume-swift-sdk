@@ -134,7 +134,7 @@ public class AudioHubImpl: AudioHub {
     public var stateSubject = CurrentValueSubject<AudioHubState, Never>(.unconfigured)
     
     // MARK: Queues
-    private let microphoneQueue = DispatchQueue(label: "com.humeai.queue.microphone")
+    private let microphoneQueue = DispatchQueue(label: "com.humeai-sdk.microphone.queue")
     
     // MARK: Handlers
     public var microphoneDataChunkHandler: MicrophoneDataChunkBlock?

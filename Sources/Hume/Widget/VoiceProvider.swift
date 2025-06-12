@@ -2,41 +2,6 @@ import AVFoundation
 import Combine
 import Foundation
 
-public enum VoiceProviderError: Error {
-    case socketDisconnected
-    case microphoneInitializationError(Error)
-    case socketSendError(Error)
-    case websocketError(WebSocketError)
-}
-
-public enum VoiceProviderState {
-    case connecting
-    case connected
-    case disconnecting
-    case disconnected
-}
-
-public protocol VoiceProvidable {
-    var state: AnyPublisher<VoiceProviderState, Never> { get }
-    var delegate: VoiceProviderDelegate? { get set }
-    var isOutputMeteringEnabled: Bool { get set }
-    var microphoneMode: MicrophoneMode { get }
-    
-    @MainActor func connect(configId: String?, configVersion: String?, resumedChatGroupId: String?, sessionSettings: SessionSettings, eviVersion: EviVersion) async throws
-    @MainActor func disconnect() async
-    
-    func mute(_ mute: Bool)
-}
-
-public protocol VoiceProviderDelegate: AnyObject {
-    func voiceProvider(_ voiceProvider: any VoiceProvidable, didProduceEvent event: SubscribeEvent)
-    func voiceProvider(_ voiceProvider: any VoiceProvidable, didProduceError error: VoiceProviderError)
-    /// Handler for meter data from the microphone. Note: This is disabled. TODO: make it configurable to set this
-    func voiceProvider(_ voiceProvider: any VoiceProvidable, didReceieveAudioInputMeter audioInputMeter: Float)
-    func voiceProvider(_ voiceProvider: any VoiceProvidable, didReceieveAudioOutputMeter audioInputMeter: Float)
-    func voiceProviderDidDisconnect(_ voiceProvider: any VoiceProvidable)
-}
-
 public class VoiceProvider: VoiceProvidable {
     public var state: AnyPublisher<VoiceProviderState, Never> {
         stateSubject.eraseToAnyPublisher()
@@ -45,8 +10,8 @@ public class VoiceProvider: VoiceProvidable {
     
     private let humeClient: HumeClient
     private var socket: StreamSocket?
-    private let delegateQueue = DispatchQueue(label: "com.humeai.consumer.delegateQueue", qos: .userInteractive)
-    private let eventQueue = DispatchQueue(label: "com.humeai.consumer.eventQueue", qos: .userInteractive)
+    private let delegateQueue = DispatchQueue(label: "com.humeai-sdk.delegate.queue", qos: .userInteractive)
+    private let eventQueue = DispatchQueue(label: "com.humeai-sdk.events.queue", qos: .userInteractive)
     private var eventSubscription: Task<(), any Error>?
     
     private var audioHub: AudioHub = AudioHubImpl()
@@ -223,6 +188,9 @@ extension VoiceProvider {
                 return
             }
             self.audioHub.enqueue(soundClip: clip)
+            self.delegateQueue.async {
+                self.delegate?.voiceProvider(self, didPlayClip: clip)
+            }
         case .userInterruption:
             self.audioHub.handleInterruption()
         case .chatMetadata(let response):
