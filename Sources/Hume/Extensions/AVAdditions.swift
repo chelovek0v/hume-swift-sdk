@@ -8,12 +8,12 @@
 import AVFoundation
 
 // MARK: - Microphone permissions
-enum MicrophonePermission {
+public enum MicrophonePermission {
     case undetermined
     case denied
     case granted
     
-    static var current: MicrophonePermission {
+    public static var current: MicrophonePermission {
         if #available(iOS 17.0, *) {
             return AVAudioApplication.shared.recordPermission.asMicrophonePermission
         } else {
@@ -21,7 +21,7 @@ enum MicrophonePermission {
         }
     }
     
-    static func requestPermissions() async -> Bool {
+    public static func requestPermissions() async -> Bool {
         if #available(iOS 17.0, *) {
             return await AVAudioApplication.requestRecordPermission()
         } else {
