@@ -11,20 +11,21 @@ public class VoiceProvider: VoiceProvidable {
     private let humeClient: HumeClient
     private var socket: StreamSocket?
     private let delegateQueue = DispatchQueue(label: "com.humeai-sdk.delegate.queue", qos: .userInteractive)
-    private let eventQueue = DispatchQueue(label: "com.humeai-sdk.events.queue", qos: .userInteractive)
     private var eventSubscription: Task<(), any Error>?
     
     private var audioHub: AudioHub = AudioHubImpl()
     private var audioHubStateCancellable: AnyCancellable?
     
     public weak var delegate: (any VoiceProviderDelegate)?
-    
-    // MARK: - Calculated properties
+
+    // MARK: - Metering
     public var isOutputMeteringEnabled: Bool = false {
         didSet {
             audioHub.isOutputMeteringEnabled = isOutputMeteringEnabled
         }
     }
+
+    // MARK: - Microphone
     
     public var microphoneMode: MicrophoneMode {
         return audioHub.microphoneMode
@@ -42,6 +43,13 @@ public class VoiceProvider: VoiceProvidable {
     
     // MARK: - Connection
 
+    /// Starts a connection with EVI.
+    /// - Parameters:
+    ///   - configId: The unique identifier for an EVI configuration.
+    ///   - configVersion: Include this parameter to apply a specific version of an EVI configuration. If omitted, the latest version will be applied.
+    ///   - resumedChatGroupId: The unique identifier for a Chat Group. Use this field to preserve context from a previous Chat session.
+    ///   - sessionSettings: Defines the session settings for the connection.
+    ///   - eviVersion: The version of EVI to use.
     public func connect(configId: String?, configVersion: String?, resumedChatGroupId: String?, sessionSettings: SessionSettings, eviVersion: EviVersion) async throws {
         Logger.info("Connecting voice provider. configId: \(String(describing: configId)), configVersion: \(String(describing: configVersion)), resumedChatGroupId: \(String(describing: resumedChatGroupId))")
         if stateSubject.value == .disconnecting {
@@ -102,6 +110,9 @@ public class VoiceProvider: VoiceProvidable {
             return
         }
         await MainActor.run { stateSubject.send(.disconnecting) }
+        self.delegateQueue.async {
+            self.delegate?.voiceProviderWillDisconnect(self)
+        }
         Logger.info("Disconnecting voice provider")
         
         do {
@@ -112,7 +123,9 @@ public class VoiceProvider: VoiceProvidable {
         eventSubscription?.cancel()
         socket?.close()
         Logger.info("Voice provider disconnected")
-        self.delegate?.voiceProviderDidDisconnect(self)
+        self.delegateQueue.async {
+            self.delegate?.voiceProviderDidDisconnect(self)
+        }
         stateSubject.send(.disconnected)
     }
     
