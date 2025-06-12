@@ -66,41 +66,48 @@ public class VoiceProvider: VoiceProvidable {
             await audioHub.setEviVersion(eviVersion)
         }
         
-        // open socket
-        self.socket = try await self.humeClient.empathicVoice.chat
-            .connect(
-                configId: configId,
-                configVersion: configVersion,
-                resumedChatGroupId: resumedChatGroupId,
-                onOpen: { [weak self] response in
-                    Logger.info("Socket Opened")
-                    guard let self = self else { return }
-                    Task {
-                        Logger.info("Volice provider listening for events")
-                        self.startListeningForEvents()
-                        try await self.sendSessionSettings(message: sessionSettings)
-                        
-                        Logger.info("Waiting for audio hub to be ready")
-                        try await self.audioHub.state.waitFor(.running)
-
-                        Logger.info("Finalizing audio hub configuration")
-                        self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
-                        self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
-                        
-                        self.stateSubject.send(.connected)
-                    }
-                },
-                onClose: { [weak self] closeCode, reason in
-                    Logger.warn("Socket Closed: \(closeCode). Reason: \(String(describing: reason))")
-                    
-                    if self?.stateSubject.value == .connected || self?.stateSubject.value == .connecting {
-                        Task { await self?.disconnect() }
-                    }
-                },
-                onError: { error, response in
-                    Logger.warn("Socket Errored: \(error). Response: \(String(describing: response))")
-                }
-            )
+        try await withCheckedThrowingContinuation { continuation in
+            // open socket
+            Task {
+                self.socket = try? await self.humeClient.empathicVoice.chat
+                    .connect(
+                        configId: configId,
+                        configVersion: configVersion,
+                        resumedChatGroupId: resumedChatGroupId,
+                        onOpen: { [weak self] response in
+                            Logger.info("Socket Opened")
+                            guard let self = self else { return }
+                            Task {
+                                do {
+                                    Logger.info("Volice provider listening for events")
+                                    self.startListeningForEvents()
+                                    try await self.sendSessionSettings(message: sessionSettings)
+                                    
+                                    Logger.info("Waiting for audio hub to be ready")
+                                    try await self.audioHub.state.waitFor(.running)
+                                    
+                                    Logger.info("Finalizing audio hub configuration")
+                                    self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
+                                    self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
+                                    self.stateSubject.send(.connected)
+                                    continuation.resume()
+                                } catch {
+                                    continuation.resume(throwing: error)
+                                }
+                            }
+                        },
+                        onClose: { [weak self] closeCode, reason in
+                            Logger.warn("Socket Closed: \(closeCode). Reason: \(String(describing: reason))")
+                            if self?.stateSubject.value == .connected || self?.stateSubject.value == .connecting {
+                                Task { await self?.disconnect() }
+                            }
+                        },
+                        onError: { error, response in
+                            Logger.warn("Socket Errored: \(error). Response: \(String(describing: response))")
+                        }
+                    )
+            }
+        }
     }
     
     public func disconnect() async {

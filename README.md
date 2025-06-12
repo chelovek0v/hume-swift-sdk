@@ -64,7 +64,6 @@ try await voiceProvider.connect(
     configVersion: nil,
     sessionSettings: sessionSettings,
     eviVersion: .v3)
-try await voiceProvider.state.waitFor(.connected)
 
 // Sending user text input manually
 await self.voiceProvider.sendUserInput(message: "Hey, how are you?")
