@@ -9,8 +9,8 @@ import Foundation
 
 public typealias EmotionScores = [String: Double]
 public struct ExpressionMeasurement {
-    let name: String
-    let value: Double
+    public let name: String
+    public let value: Double
     
     init(_ name: String, _ value: Double) {
         self.name = name
