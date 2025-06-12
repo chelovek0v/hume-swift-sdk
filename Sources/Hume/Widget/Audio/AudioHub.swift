@@ -84,7 +84,6 @@ public class AudioHubImpl: AudioHub {
         }
     }
     private var microphone: Microphone!
-//    private var inputEQNode: AVAudioNode!
     private var inputNode: AVAudioInputNode!
     private var mainMixer: AVAudioMixerNode!
     private var outputNode: AVAudioOutputNode!
@@ -188,7 +187,6 @@ public class AudioHubImpl: AudioHub {
             inputNode = audioEngine.inputNode
             mainMixer = audioEngine.mainMixerNode
             outputNode = audioEngine.outputNode
-            //            inputEQNode = try Self.makeInputEQNode()
             
             Logger.debug("Initializing microphone")
             self.microphone = try Microphone(audioEngine: audioEngine,
@@ -239,30 +237,28 @@ public class AudioHubImpl: AudioHub {
     
     public func stop() async throws {
         Logger.info("Stopping AudioHub")
-        Task {
-            let state = await stateSubject.value
-            switch state {
-            case .starting:
-                Logger.debug("audio hub was starting, waiting to finish")
-                try await stateSubject.waitFor(.running)
-            case .stopped, .stopping, .unconfigured, .configuring:
-                Logger.warn("attempted to stop audio hub from \(state) state")
-                return
-            case .running:
-                break
-            }
-
-            await stateSubject.send(.stopping)
-
-            microphoneDataChunkHandler = nil
-            eviSoundPlayer.soundPlayer.clearQueue()
-            if audioEngine.isRunning {
-                Logger.debug("Stopping audio engine")
-                audioEngine.stop()
-            }
-            try audioSession.stop(configuration: .voiceChat)
-            await stateSubject.send(.stopped)
+        let state = await stateSubject.value
+        switch state {
+        case .starting:
+            Logger.warn("audio hub was starting, waiting to finish")
+            try await stateSubject.waitFor(.running)
+        case .stopped, .stopping, .unconfigured, .configuring:
+            Logger.warn("attempted to stop audio hub from \(state) state")
+            return
+        case .running:
+            break
         }
+
+        await stateSubject.send(.stopping)
+
+        microphoneDataChunkHandler = nil
+        eviSoundPlayer.soundPlayer.clearQueue()
+        if audioEngine.isRunning {
+            Logger.debug("Stopping audio engine")
+            audioEngine.stop()
+        }
+        try audioSession.stop(configuration: .voiceChat)
+        await stateSubject.send(.stopped)
     }
     
     public func muteMic(_ mute: Bool) {
@@ -280,7 +276,6 @@ public class AudioHubImpl: AudioHub {
         let outputFormat = outputNode.outputFormat(forBus: 0)
         
         // attach
-//        audioEngine.attach(inputEQNode)
         audioEngine.attach(microphone.sinkNode)
         audioEngine.attach(eviSoundPlayer.soundPlayer.audioNode)
         
@@ -306,7 +301,6 @@ public class AudioHubImpl: AudioHub {
     
     private func connectAudioGraph(_ inputFormat: AVAudioFormat?, _ outputFormat: AVAudioFormat?) {
         let inputChain: [(AVAudioNode, AVAudioNode)] = [
-//            (inputNode, inputEQNode),
             (inputNode, microphone.sinkNode)]
         
         let outputChain: [(AVAudioNode, AVAudioNode)] = [
@@ -369,46 +363,5 @@ extension AudioHubImpl: AudioSessionDelegate {
             // only start back up if we're running
             try? audioEngine.start()
         }
-    }
-}
-
-// MARK: - EQs
-
-extension AudioHubImpl {
-    private static func makeInputEQNode() throws -> AVAudioNode {
-        let eqNode = AVAudioUnitEQ(numberOfBands: 4)
-        // 1. High-Pass Filter ~ 80 Hz
-        let hpfBand = eqNode.bands[0]
-        hpfBand.filterType = .highPass
-        hpfBand.frequency = 100.0
-        hpfBand.bandwidth = 0.5
-        hpfBand.gain = 0.0
-        hpfBand.bypass = false
-        
-        // 2. Low-Mid Cut ~ 300 Hz
-        let lowMidCutBand = eqNode.bands[1]
-        lowMidCutBand.filterType = .parametric
-        lowMidCutBand.frequency = 300.0
-        lowMidCutBand.bandwidth = 1.0
-        lowMidCutBand.gain = -2.0
-        lowMidCutBand.bypass = false
-        
-        // 3. Presence Boost ~ 3 kHz
-        let presenceBand = eqNode.bands[2]
-        presenceBand.filterType = .parametric
-        presenceBand.frequency = 3000.0
-        presenceBand.bandwidth = 1.0
-        presenceBand.gain = 3.0
-        presenceBand.bypass = false
-        
-        // 4. Air Region Shelf ~ 10 kHz
-        let airBand = eqNode.bands[3]
-        airBand.filterType = .highShelf
-        airBand.frequency = 8000.0
-        airBand.bandwidth = 0.5
-        airBand.gain = -2.0
-        airBand.bypass = false
-        
-        return eqNode
     }
 }

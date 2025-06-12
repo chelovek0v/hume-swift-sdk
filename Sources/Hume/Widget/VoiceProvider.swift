@@ -23,7 +23,7 @@ public protocol VoiceProvidable {
     var microphoneMode: MicrophoneMode { get }
     
     @MainActor func connect(configId: String?, configVersion: String?, resumedChatGroupId: String?, sessionSettings: SessionSettings, eviVersion: EviVersion) async throws
-    @MainActor func disconnect()
+    @MainActor func disconnect() async
     
     func mute(_ mute: Bool)
 }
@@ -78,6 +78,13 @@ public class VoiceProvider: VoiceProvidable {
     // MARK: - Connection
 
     public func connect(configId: String?, configVersion: String?, resumedChatGroupId: String?, sessionSettings: SessionSettings, eviVersion: EviVersion) async throws {
+        Logger.info("Connecting voice provider. configId: \(String(describing: configId)), configVersion: \(String(describing: configVersion)), resumedChatGroupId: \(String(describing: resumedChatGroupId))")
+        if stateSubject.value == .disconnecting {
+            // need to wait to finish disconnecting
+            Logger.debug("was in the middle of disconnecting, waiting to finish...")
+            try await stateSubject.waitFor(.disconnected)
+            Logger.debug("...disconnected")
+        }
         stateSubject.send(.connecting)
         audioHub.microphoneDataChunkHandler = handleMicrophoneData(_:averagePower:)
         if audioHub.stateSubject.value == .unconfigured {
@@ -114,7 +121,7 @@ public class VoiceProvider: VoiceProvidable {
                     Logger.warn("Socket Closed: \(closeCode). Reason: \(String(describing: reason))")
                     
                     if self?.stateSubject.value == .connected || self?.stateSubject.value == .connecting {
-                        self?.disconnect()
+                        Task { await self?.disconnect() }
                     }
                 },
                 onError: { error, response in
@@ -123,24 +130,25 @@ public class VoiceProvider: VoiceProvidable {
             )
     }
     
-    public func disconnect() {
+    public func disconnect() async {
         Logger.info("attempting to disconnect voice provider")
         guard [.connected, .connecting].contains(stateSubject.value) else {
             Logger.info("not connected")
             return
         }
-        stateSubject.send(.disconnecting)
+        await MainActor.run { stateSubject.send(.disconnecting) }
         Logger.info("Disconnecting voice provider")
-        Task {
-            try? await audioHub.stop()
-            eventSubscription?.cancel()
-            socket?.close()
-            Logger.info("Voice provider disconnected")
-            delegateQueue.async {
-                self.delegate?.voiceProviderDidDisconnect(self)
-            }
-            stateSubject.send(.disconnected)
+        
+        do {
+            try await audioHub.stop()
+        } catch {
+            Logger.error("Failed to stop audio hub: \(error)")
         }
+        eventSubscription?.cancel()
+        socket?.close()
+        Logger.info("Voice provider disconnected")
+        self.delegate?.voiceProviderDidDisconnect(self)
+        stateSubject.send(.disconnected)
     }
     
     // MARK: - Controls
@@ -217,7 +225,12 @@ extension VoiceProvider {
             self.audioHub.enqueue(soundClip: clip)
         case .userInterruption:
             self.audioHub.handleInterruption()
-        case .chatMetadata(_):
+        case .chatMetadata(let response):
+            Logger.debug("""
+            --Received metadata response--
+            Chat ID: \(response.chatId)
+            Chat Group ID: \(response.chatGroupId)
+            """)
             Task {
                 try? await self.audioHub.start()
             }
