@@ -7,7 +7,6 @@
 
 import Foundation
 
-
 public class Chat: NSObject {
     
     private var onOpen: ((URLResponse?) -> Void)? = nil

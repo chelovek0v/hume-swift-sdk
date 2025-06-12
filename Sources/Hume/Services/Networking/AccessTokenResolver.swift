@@ -7,9 +7,8 @@
 
 import Foundation
 
-public struct AccessTokenResolver {
-    
-    public static func resolve(options: HumeClient.Options) async throws -> String {
+internal struct AccessTokenResolver {
+    internal static func resolve(options: HumeClient.Options) async throws -> String {
         try await {
             switch options {
             case .accessToken(let tokenProvider):

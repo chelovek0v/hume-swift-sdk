@@ -35,30 +35,44 @@ with microphones.
 ```swift
 import Hume
 
+let humeClient = await HumeClient(
+    options: .accessToken(tokenProvider: {
+        do {
+            return try await myAuthProvider.humeAccessToken
+        } catch {
+            Logger.error("error fetching hume access token")
+            throw error
+        }
+    }))
 
-let voiceProvider = VoiceProvider(
-    apiKey: "YOUR_API_KEY",
-    clientSecret: "YOUR_CLIENT_SECRET")
-
-voiceProvider.onMessage = { event in
-    // Optional handling of the SubscribeEvent. Maybe render in a List
-}
-
+let voiceProvider = VoiceProvider(client: humeClient)
 
 // Request permission to record audio. Be sure to add `Privacy - Microphone Usage Description`
 // to your Info.plist
-AVAudioApplication.requestRecordPermission { granted in
-    if granted {
-        Task {
-            try await voiceProvider.connect()
-        }
-    }   
-}
+let granted = await MicrophonePermission.requestPermissions()
+guard granted else { return }
 
+let sessionSettings = SessionSettings.withAudioConfiguration(
+    AudioConfiguration(
+        channels: AudioConstants.InputChannels,
+        encoding: AudioConstants.DefaultAudioFormat.encoding,
+        sampleRate: Int(AudioConstants.SampleRate)),
+    variables: ["myCustomVariable": myValue, "datetime": Date().formattedForSessionSettings()])
 
-// Sending user text input
+try await voiceProvider.connect(
+    configId: myConfigId,
+    configVersion: nil,
+    sessionSettings: sessionSettings,
+    eviVersion: .v3)
+try await voiceProvider.state.waitFor(.connected)
+
+// Sending user text input manually
 await self.voiceProvider.sendUserInput(message: "Hey, how are you?")
 ```
+
+### Listening for VoiceProvider updates
+Implement `VoiceProviderDelegate` methods to be notified of events, errors, meter data, state, etc.  
+
 
 ## Client Library
 
