@@ -46,6 +46,7 @@ let humeClient = await HumeClient(
     }))
 
 let voiceProvider = VoiceProvider(client: humeClient)
+voiceProvider.delegate = myDelegate
 
 // Request permission to record audio. Be sure to add `Privacy - Microphone Usage Description`
 // to your Info.plist
