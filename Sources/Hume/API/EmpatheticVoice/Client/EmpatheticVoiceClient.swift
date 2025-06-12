@@ -8,7 +8,7 @@
 import Foundation
 
 
-public class EmpatheticVoice {
+public class EmpathicVoice {
     
     private let options: HumeClient.Options
 

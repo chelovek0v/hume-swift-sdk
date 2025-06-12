@@ -68,7 +68,7 @@ empathic voice WebSocket.
 ```swift
 var hume = HumeClient(apiKey: "key", clientSecret: "secret")
 
-let socket = try await self.humeClient.empatheticVoice.chat
+let socket = try await self.humeClient.empathicVoice.chat
     .connect(
         onOpen: { response in
             print("Socket Opened")

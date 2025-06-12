@@ -67,7 +67,7 @@ public class VoiceProvider: VoiceProvidable {
         }
         
         // open socket
-        self.socket = try await self.humeClient.empatheticVoice.chat
+        self.socket = try await self.humeClient.empathicVoice.chat
             .connect(
                 configId: configId,
                 configVersion: configVersion,

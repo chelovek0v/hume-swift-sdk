@@ -20,7 +20,7 @@ public class HumeClient {
         self.options = options
     }
     
-    public lazy var empatheticVoice: EmpatheticVoice = {
-        return EmpatheticVoice(options: options)
+    public lazy var empathicVoice: EmpathicVoice = {
+        return EmpathicVoice(options: options)
     }()
 }
