@@ -11,8 +11,8 @@ internal struct AccessTokenResolver {
     internal static func resolve(options: HumeClient.Options) async throws -> String {
         try await {
             switch options {
-            case .accessToken(let tokenProvider):
-                return try await tokenProvider()
+            case .accessToken(let accessToken):
+                return accessToken
             case .apiKey(let apiKey, let clientSecret):
                 return try await fetchAccessToken(apiKey: apiKey, clientSecret: clientSecret)
             }
