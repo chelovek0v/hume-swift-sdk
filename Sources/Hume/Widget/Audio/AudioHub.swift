@@ -300,6 +300,8 @@ public class AudioHubImpl: AudioHub {
     }
     
     private func connectAudioGraph(_ inputFormat: AVAudioFormat?, _ outputFormat: AVAudioFormat?) {
+        let actualOutputFormat = outputFormat
+
         let inputChain: [(AVAudioNode, AVAudioNode)] = [
             (inputNode, microphone.sinkNode)]
         
@@ -308,12 +310,12 @@ public class AudioHubImpl: AudioHub {
         
         Logger.debug("Connecting input chain")
         inputChain.forEach {
-            audioEngine.connect($0.0, to: $0.1, format: inputFormat)
+            audioEngine.connect($0.0, to: $0.1, format: nil)
         }
         
         Logger.debug("Connecting output chain")
         outputChain.forEach {
-            audioEngine.connect($0.0, to: $0.1, format: outputFormat)
+            audioEngine.connect($0.0, to: $0.1, format: actualOutputFormat)
         }
     }
     

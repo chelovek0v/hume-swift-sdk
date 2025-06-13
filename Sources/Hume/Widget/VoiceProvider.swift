@@ -91,6 +91,7 @@ public class VoiceProvider: VoiceProvidable {
                                     self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
                                     self.stateSubject.send(.connected)
                                     continuation.resume()
+                                    Logger.info("Voice Provider connected successfully")
                                 } catch {
                                     continuation.resume(throwing: error)
                                 }
