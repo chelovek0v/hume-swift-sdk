@@ -16,4 +16,20 @@ public struct ToolCallMessage: Codable {
     let responseRequired: Bool
     let type: String?
     let customSessionId: String?
+
+    public init(name: String,
+                parameters: String,
+                toolCallId: String,
+                toolType: ToolType,
+                responseRequired: Bool,
+                type: String?,
+                customSessionId: String?) {
+        self.name = name
+        self.parameters = parameters
+        self.toolCallId = toolCallId
+        self.toolType = toolType
+        self.responseRequired = responseRequired
+        self.type = type
+        self.customSessionId = customSessionId
+    }
 }

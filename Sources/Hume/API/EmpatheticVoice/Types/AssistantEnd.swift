@@ -10,4 +10,8 @@ import Foundation
 
 public struct AssistantEnd: Decodable {
     let type: String
+
+    public init() {
+        self.type = "assistant_end"
+    }
 }

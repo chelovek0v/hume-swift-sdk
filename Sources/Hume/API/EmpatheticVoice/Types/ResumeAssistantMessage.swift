@@ -12,7 +12,7 @@ public struct ResumeAssistantMessage: Codable {
     public let customSessionId: String?
     public let type: String
     
-    init(customSessionId: String? = nil) {
+    public init(customSessionId: String? = nil) {
         self.customSessionId = customSessionId
         self.type = "resume_assistant_message"
     }

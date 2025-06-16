@@ -17,6 +17,18 @@ public struct WebSocketError: Codable {
     /** Error slug. */
     public let slug: String
     public let type: String
+
+    public init(code: String,
+                customSessionId: String?,
+                message: String,
+                slug: String,
+                type: String) {
+        self.code = code
+        self.customSessionId = customSessionId
+        self.message = message
+        self.slug = slug
+        self.type = type
+    }
 }
 
 public enum WebSocketErrorType: String {

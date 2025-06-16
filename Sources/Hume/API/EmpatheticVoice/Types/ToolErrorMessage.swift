@@ -15,4 +15,20 @@ public struct ToolErrorMessage: Codable {
     let customSessionId: String?
     let code: String?
     let level: String?
+
+    public init(type: String,
+                toolCallId: String,
+                content: String,
+                error: String,
+                customSessionId: String?,
+                code: String?,
+                level: String?) {
+        self.type = type
+        self.toolCallId = toolCallId
+        self.content = content
+        self.error = error
+        self.customSessionId = customSessionId
+        self.code = code
+        self.level = level
+    }
 }

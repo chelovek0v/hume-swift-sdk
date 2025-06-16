@@ -14,4 +14,14 @@ public struct ChatMetadata: Codable {
     public let chatId: String
     public let customSessionId: String?
     public let type: String;
+
+    public init(chatGroupId: String,
+                chatId: String,
+                customSessionId: String?,
+                type: String) {
+        self.chatGroupId = chatGroupId
+        self.chatId = chatId
+        self.customSessionId = customSessionId
+        self.type = type
+    }
 }

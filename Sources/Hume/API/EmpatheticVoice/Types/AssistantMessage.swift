@@ -18,6 +18,19 @@ public struct AssistantMessage: Codable {
     /** Inference model results. */
     public let models: Inference
     public let type: String
-    
+
+    public init(customSessionId: String?,
+                fromText: Bool,
+                id: String?,
+                message: ChatMessage,
+                models: Inference,
+                type: String) {
+        self.customSessionId = customSessionId
+        self.fromText = fromText
+        self.id = id
+        self.message = message
+        self.models = models
+        self.type = type
+    }
 }
 

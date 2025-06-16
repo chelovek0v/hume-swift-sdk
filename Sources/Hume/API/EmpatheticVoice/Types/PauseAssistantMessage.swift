@@ -12,7 +12,7 @@ public struct PauseAssistantMessage: Codable {
     public let customSessionId: String?
     public let type: String
     
-    init(customSessionId: String? = nil) {
+    public init(customSessionId: String? = nil) {
         self.customSessionId = customSessionId
         self.type = "pause_assistant_message"
     }

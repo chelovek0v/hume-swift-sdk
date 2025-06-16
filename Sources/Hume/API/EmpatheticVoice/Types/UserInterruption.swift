@@ -12,4 +12,12 @@ public struct UserInterruption: Codable {
     let customSessionId: String?
     let time: Int
     let type: String
+
+    public init(customSessionId: String?,
+                time: Int,
+                type: String) {
+        self.customSessionId = customSessionId
+        self.time = time
+        self.type = type
+    }
 }

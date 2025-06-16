@@ -18,7 +18,7 @@ public struct UserInput: Codable {
     let text: String
     let type: String
     
-    init(customSessionId: String? = nil, text: String) {
+    public init(customSessionId: String? = nil, text: String) {
         self.customSessionId = customSessionId
         self.text = text
         self.type = "user_input"

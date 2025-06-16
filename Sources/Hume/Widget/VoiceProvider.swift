@@ -90,6 +90,9 @@ public class VoiceProvider: VoiceProvidable {
                                     self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
                                     self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
                                     self.stateSubject.send(.connected)
+                                    self.delegateQueue.async {
+                                        self.delegate?.voiceProviderDidConnect(self)
+                                    }
                                     continuation.resume()
                                     Logger.info("Voice Provider connected successfully")
                                 } catch {

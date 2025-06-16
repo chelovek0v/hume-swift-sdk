@@ -15,4 +15,9 @@ public struct MillisecondInterval: Codable {
     
     /** End time of the interval in milliseconds. */
     public let end: Int
+    
+    public init(begin: Int, end: Int) {
+        self.begin = begin
+        self.end = end
+    }
 }

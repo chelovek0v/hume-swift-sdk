@@ -10,4 +10,8 @@ import Foundation
 
 public struct Inference: Codable {
     public let prosody: ProsodyInference?
+
+    public init(prosody: ProsodyInference?) {
+        self.prosody = prosody
+    }
 }

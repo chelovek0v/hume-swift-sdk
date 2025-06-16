@@ -13,4 +13,14 @@ public struct ToolResponseMessage: Codable {
     let toolCallId: String
     let content: String
     let customSessionId: String?
+
+    public init(type: String,
+                toolCallId: String,
+                content: String,
+                customSessionId: String?) {
+        self.type = type
+        self.toolCallId = toolCallId
+        self.content = content
+        self.customSessionId = customSessionId
+    }
 }

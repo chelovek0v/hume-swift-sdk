@@ -16,4 +16,20 @@ public struct UserMessage: Codable {
     public let time: MillisecondInterval
     public let type: String
     public let interim: Bool
+
+    public init(fromText: Bool,
+                message: ChatMessage,
+                models: Inference,
+                customSessionId: String?,
+                time: MillisecondInterval,
+                type: String,
+                interim: Bool) {
+        self.fromText = fromText
+        self.message = message
+        self.models = models
+        self.customSessionId = customSessionId
+        self.time = time
+        self.type = type
+        self.interim = interim
+    }
 }

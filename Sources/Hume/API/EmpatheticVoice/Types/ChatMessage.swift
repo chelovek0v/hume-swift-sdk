@@ -12,4 +12,14 @@ public struct ChatMessage: Codable {
     public let role: Role
     public let toolCall: ToolCallMessage?
     public let toolResult: ChatMessageToolResult?
+
+    public init(content: String?,
+                role: Role,
+                toolCall: ToolCallMessage?,
+                toolResult: ChatMessageToolResult?) {
+        self.content = content
+        self.role = role
+        self.toolCall = toolCall
+        self.toolResult = toolResult
+    }
 }
