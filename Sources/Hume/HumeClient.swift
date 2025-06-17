@@ -10,8 +10,6 @@ import Foundation
 
 public class HumeClient {
     public enum Options {
-        /// Use an API key and secret directly. *Note*: This is not recommended for production client use and only recommended if using this library in a server-side environment where the API key and secret can be kept secure.
-        case apiKey(apiKey: String, clientSecret: String)
         /// Use an access token with the Hume APIs
         case accessToken(token: String)
     }
