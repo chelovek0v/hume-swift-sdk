@@ -7,7 +7,6 @@
 
 import Foundation
 
-
 public class Chat: NSObject {
     
     private var onOpen: ((URLResponse?) -> Void)? = nil
@@ -23,6 +22,7 @@ public class Chat: NSObject {
     public func connect(
         configId: String? = nil,
         configVersion: String? = nil,
+        resumedChatGroupId: String? = nil,
         onOpen: ((URLResponse?) -> Void)? = nil,
         onClose: ((Int, String?) -> Void)? = nil,
         onError: ((Error, URLResponse?) -> Void)? = nil
@@ -32,18 +32,24 @@ public class Chat: NSObject {
         self.onClose = onClose
         self.onError = onError
         
-        var components = URLComponents(string: "wss://api.hume.ai/v0/evi/chat")
+        // TODO: make host configurable
+        let host: String = "api.hume.ai"
         
-        let accessToken = try await fetchAccessToken()
+        var components = URLComponents(string: "wss://\(host)/v0/evi/chat")
+        let accessToken = try await AccessTokenResolver.resolve(options: options)
         
         components?.queryItems = [
             URLQueryItem(name: "accessToken", value: accessToken),
+            URLQueryItem(name: "verbose_transcription", value: String(true)),
         ]
         if let configId {
             components?.queryItems?.append(URLQueryItem(name: "config_id", value: configId))
         }
         if let configVersion {
             components?.queryItems?.append(URLQueryItem(name: "config_version", value: configVersion))
+        }
+        if let resumedChatGroupId {
+            components?.queryItems?.append(URLQueryItem(name: "resumed_chat_group_id", value: resumedChatGroupId))
         }
         
         let url = components!.url!
@@ -60,24 +66,6 @@ public class Chat: NSObject {
         return StreamSocket(webSocketTask: webSocketTask)
     }
     
-    
-    private func fetchAccessToken() async throws -> String {
-        let authString = "\(options.apiKey):\(options.clientSecret)"
-        let encoded = authString.data(using: .utf8)?.base64EncodedString()
-        
-        let url = URL(string: "https://api.hume.ai/oauth2-cc/token")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.setValue("Basic \(encoded!)", forHTTPHeaderField: "Authorization")
-        request.httpBody = "grant_type=client_credentials".data(using: .utf8)
-        
-        // TODO: Return HumeErrors instead
-        let (data, _) = try await URLSession.shared.data(for: request)
-    
-        let token = try Defaults.decoder.decode(AuthorizationToken.self, from: data)
-        return token.accessToken
-    }
 }
 
 

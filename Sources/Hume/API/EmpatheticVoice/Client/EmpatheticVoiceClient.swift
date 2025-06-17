@@ -8,10 +8,10 @@
 import Foundation
 
 
-public class EmpatheticVoice {
+public class EmpathicVoice {
     
     private let options: HumeClient.Options
-    
+
     init(options: HumeClient.Options) {
         self.options = options
     }
