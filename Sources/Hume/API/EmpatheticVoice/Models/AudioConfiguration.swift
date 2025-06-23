@@ -13,7 +13,7 @@ public struct AudioConfiguration: Codable {
     /** Audio encoding. */
     public let encoding: Encoding
     /** Audio sample rate. */
-    public let sampleRate: Int;
+    public let sampleRate: Int
     
     
     public init(channels: Int, encoding: Encoding, sampleRate: Int) {

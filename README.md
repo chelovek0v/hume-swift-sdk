@@ -53,18 +53,14 @@ voiceProvider.delegate = myDelegate
 let granted = await MicrophonePermission.requestPermissions()
 guard granted else { return }
 
-let sessionSettings = SessionSettings.withAudioConfiguration(
-    AudioConfiguration(
-        channels: AudioConstants.InputChannels,
-        encoding: AudioConstants.DefaultAudioFormat.encoding,
-        sampleRate: Int(AudioConstants.SampleRate)),
+let sessionSettings = SessionSettings(
+    systemPrompt: "my optional system prompt",
     variables: ["myCustomVariable": myValue, "datetime": Date().formattedForSessionSettings()])
 
 try await voiceProvider.connect(
     configId: myConfigId,
     configVersion: nil,
-    sessionSettings: sessionSettings,
-    eviVersion: .v3)
+    sessionSettings: sessionSettings)
 
 // Sending user text input manually
 await self.voiceProvider.sendUserInput(message: "Hey, how are you?")
@@ -73,30 +69,6 @@ await self.voiceProvider.sendUserInput(message: "Hey, how are you?")
 ### Listening for VoiceProvider updates
 Implement `VoiceProviderDelegate` methods to be notified of events, errors, meter data, state, etc.  
 
-
-## Client Library
-
-The SDK exposes a raw client library that you can use to interface directly with the 
-empathic voice WebSocket. 
-
-```swift
-var hume = HumeClient(apiKey: "key", clientSecret: "secret")
-
-let socket = try await self.humeClient.empathicVoice.chat
-    .connect(
-        onOpen: { response in
-            print("Socket Opened")
-        },
-        onClose: { closeCode, reason in
-            print("Socket Closed: \(closeCode). Reason: \(String(describing: reason))")
-        },
-        onError: { error, response in
-            print("Socket Errored: \(error). Response: \(String(describing: response))")
-        }
-    )
-
-await socket?.sendTextInput(text: "message")
-```
 
 ## Beta Status
 This SDK is in beta, and there may be breaking changes between versions without a major 

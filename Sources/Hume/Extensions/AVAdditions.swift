@@ -171,8 +171,11 @@ extension AVAudioEngine: Prettifiable {
     }
 
     private func describeConnectionPoint(_ point: AVAudioConnectionPoint) -> String {
-        guard let format = point.node?.outputFormat(forBus: point.bus) else { return "Unknown Node" }
-        
-        return "\(type(of: point.node!)) [Bus: \(point.bus), Channels: \(format.channelCount), SampleRate: \(format.sampleRate)]"
+        guard let node = point.node else { return "Unknown Node" }
+        guard point.bus < node.numberOfOutputs else {
+            return "\(type(of: node)) [Invalid bus: \(point.bus), Max: \(node.numberOfOutputs - 1)]"
+        }
+        let format = node.outputFormat(forBus: point.bus)
+        return "\(type(of: node)) [Bus: \(point.bus), Channels: \(format.channelCount), SampleRate: \(format.sampleRate)]"
     }
 }

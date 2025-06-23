@@ -25,8 +25,7 @@ public protocol AudioHub {
     var state: AnyPublisher<AudioHubState, Never> { get }
     var stateSubject: CurrentValueSubject<AudioHubState, Never> { get }
 
-    func configure(eviVersion: EviVersion) async throws
-    func setEviVersion(_ eviVersion: EviVersion) async
+    func configure() async throws
     
     func enqueue(soundClip: SoundClip)
     
@@ -50,36 +49,14 @@ public protocol AudioHubDelegate {
     func audioHub(_ audioHub: AudioHub, did soundClip: SoundClip)
 }
 
-fileprivate class EviSoundPlayer {
-    var soundPlayer: SoundPlayer {
-        switch eviVersion {
-        case .v2: _v2Player
-        case .v3: _v3Player
-        case .none:
-            fatalError("Unsupported EviVersion")
-        }
-    }
-    
-    var eviVersion: EviVersion!
-    
-    private let _v2Player: SoundPlayer
-    private let _v3Player: SoundPlayer
-    
-    init(outputFormat: AVAudioFormat) {
-        Logger.info("Initializing EviSoundPlayer")
-        self._v2Player = SoundPlayer(inputFormat: Constants.DefaultAudioOutputFormatEvi2, outputFormat: outputFormat)
-        self._v3Player = SoundPlayer(inputFormat: Constants.DefaultAudioOutputFormatEvi3, outputFormat: outputFormat)
-    }
-}
-
 public class AudioHubImpl: AudioHub {
     // MARK: Audio gear
     private let audioEngine = AVAudioEngine()
     private let audioSession = AudioSession.shared
-    private var eviSoundPlayer: EviSoundPlayer! {
+    private var soundPlayer: SoundPlayer? {
         didSet {
-            if let eviSoundPlayer {
-                eviSoundPlayer.eviVersion = eviVersion
+            if let _pendingOutputMeterEnabled, let soundPlayer {
+                isOutputMeteringEnabled = _pendingOutputMeterEnabled
             }
         }
     }
@@ -87,13 +64,6 @@ public class AudioHubImpl: AudioHub {
     private var inputNode: AVAudioInputNode!
     private var mainMixer: AVAudioMixerNode!
     private var outputNode: AVAudioOutputNode!
-    private var eviVersion: EviVersion! {
-        didSet {
-            if let eviSoundPlayer {
-                eviSoundPlayer.eviVersion = eviVersion
-            }
-        }
-    }
     
     public var microphoneMode: MicrophoneMode {
         return MicrophoneMode(
@@ -106,8 +76,8 @@ public class AudioHubImpl: AudioHub {
     private var _pendingOutputMeterEnabled: Bool?
     public var isOutputMeteringEnabled: Bool = false {
         didSet {
-            if eviSoundPlayer != nil {
-                eviSoundPlayer.soundPlayer.meteringNode.isMetering = isOutputMeteringEnabled
+            if let soundPlayer {
+                soundPlayer.meteringNode.isMetering = isOutputMeteringEnabled
                 _pendingOutputMeterEnabled = nil
             } else {
                 _pendingOutputMeterEnabled = isOutputMeteringEnabled
@@ -116,7 +86,9 @@ public class AudioHubImpl: AudioHub {
     }
     public var outputMeterListener: ((Float) -> Void)? {
         didSet {
-            eviSoundPlayer.soundPlayer.meteringNode.meterListener = outputMeterListener
+            if let soundPlayer {
+                soundPlayer.meteringNode.meterListener = outputMeterListener
+            }
             if outputMeterListener == nil && isOutputMeteringEnabled {
                 // disable metering to save resources if there's no listener
                 isOutputMeteringEnabled = false
@@ -147,31 +119,8 @@ public class AudioHubImpl: AudioHub {
         Logger.info("initializing AudioHub")
         audioSession.delegate = self
     }
-    
-    public func setEviVersion(_ eviVersion: EviVersion) async {
-        Logger.info("Updating evi version for soundplayer")
-        guard self.eviVersion != eviVersion else {
-            Logger.debug("evi version already set: \(eviVersion.rawValue)")
-            return
-        }
-        
-        let state = await stateSubject.value
-        Logger.info("swapping the soundplayer version")
-        let alreadyConfigured = state != .unconfigured || state != .configuring
-        
-        if alreadyConfigured {
-            disconnectAudioGraph()
-        }
-        
-        // passes through to set evi version on sound player
-        self.eviVersion = eviVersion
-        
-        if alreadyConfigured {
-            configureAudioGraph()
-        }
-    }
-    
-    public func configure(eviVersion: EviVersion) async throws {
+
+    public func configure() async throws {
         Logger.info("configuring audio hub ")
         guard case .unconfigured = await stateSubject.value else {
             Logger.warn("audio hub already configured")
@@ -194,18 +143,7 @@ public class AudioHubImpl: AudioHub {
                                              sampleSize: Constants.SampleSize,
                                              audioFormat: Constants.DefaultAudioFormat)
             
-            
-            let outputFormat = outputNode.outputFormat(forBus: 0)
-            Logger.debug("Initializing soundplayer with outputFormat: \(outputFormat)")
-            self.eviVersion = eviVersion
-            self.eviSoundPlayer = EviSoundPlayer(outputFormat: outputFormat)
-            if let _pendingOutputMeterEnabled {
-                isOutputMeteringEnabled = _pendingOutputMeterEnabled
-            }
-            
             self.microphone.onChunk = handleMicrophoneDataChunk
-            
-            configureAudioGraph()
         } catch {
             await stateSubject.send(.unconfigured)
             throw error
@@ -216,11 +154,18 @@ public class AudioHubImpl: AudioHub {
 
     public func enqueue(soundClip: SoundClip) {
         Logger.info("Adding message to SoundPlayer: \(soundClip.id) (\(soundClip.index)")
-        eviSoundPlayer.soundPlayer.enqueueAudio(soundClip: soundClip)
+        if soundPlayer == nil, let header = soundClip.header {
+            initializeSoundPlayer(with: header)
+        }
+        soundPlayer?.enqueueAudio(soundClip: soundClip)
     }
     
     public func handleInterruption() {
-        eviSoundPlayer.soundPlayer.clearQueue()
+        guard let soundPlayer else {
+            Logger.warn("no sound player to clear queue")
+            return
+        }
+        soundPlayer.clearQueue()
     }
     
     public func start() async throws {
@@ -252,7 +197,10 @@ public class AudioHubImpl: AudioHub {
         await stateSubject.send(.stopping)
 
         microphoneDataChunkHandler = nil
-        eviSoundPlayer.soundPlayer.clearQueue()
+        soundPlayer?.clearQueue()
+        disconnectAudioGraph()
+        
+        soundPlayer = nil
         if audioEngine.isRunning {
             Logger.debug("Stopping audio engine")
             audioEngine.stop()
@@ -269,15 +217,33 @@ public class AudioHubImpl: AudioHub {
         }
     }
     
+    // MARK: - Helpers
+    private func initializeSoundPlayer(with header: WAVHeader) {
+        Logger.info("Initializing sound player with header: \(header)")
+        guard let inputFormat = AVAudioFormat(commonFormat: Constants.DefaultAudioFormat.commonFormat,
+                                        sampleRate: Double(header.sampleRate),
+                                        channels: AVAudioChannelCount(header.numChannels),
+                                              interleaved: header.numChannels > 1) else {
+            Logger.error("Failed to create input format for sound player")
+            return
+        }
+        soundPlayer = SoundPlayer(inputFormat: inputFormat, outputFormat: outputNode.outputFormat(forBus: 0))
+        configureAudioGraph()
+    }
+    
     // MARK: - Connections
     private func configureAudioGraph() {
         Logger.info("Connecting audio graph together")
+        guard let soundPlayer else {
+            Logger.error("Sound player is not initialized")
+            return
+        }
         let inputFormat = microphone.inputFormat
         let outputFormat = outputNode.outputFormat(forBus: 0)
         
         // attach
         audioEngine.attach(microphone.sinkNode)
-        audioEngine.attach(eviSoundPlayer.soundPlayer.audioNode)
+        audioEngine.attach(soundPlayer.audioNode)
         
         connectAudioGraph(inputFormat, outputFormat)
 
@@ -285,6 +251,11 @@ public class AudioHubImpl: AudioHub {
     }
     
     private func disconnectAudioGraph() {
+        guard let soundPlayer else {
+            Logger.error("Sound player is not initialized")
+            return
+        }
+        
         Logger.info("Disconnecting audio graph")
         if let inputNode {
             audioEngine.disconnectNodeOutput(inputNode)
@@ -292,21 +263,22 @@ public class AudioHubImpl: AudioHub {
             Logger.warn("missing input node while disconnecting audio graph")
         }
         
-        if let soundPlayer = eviSoundPlayer {
-            audioEngine.disconnectNodeOutput(soundPlayer.soundPlayer.audioNode)
-        } else {
-            Logger.warn("missing evi sound player while disconnecting audio graph")
-        }
+        audioEngine.disconnectNodeOutput(soundPlayer.audioNode)
     }
     
     private func connectAudioGraph(_ inputFormat: AVAudioFormat?, _ outputFormat: AVAudioFormat?) {
+        guard let soundPlayer else {
+            Logger.error("Sound player is not initialized")
+            return
+        }
+        
         let actualOutputFormat = outputFormat
 
         let inputChain: [(AVAudioNode, AVAudioNode)] = [
             (inputNode, microphone.sinkNode)]
         
         let outputChain: [(AVAudioNode, AVAudioNode)] = [
-            (eviSoundPlayer.soundPlayer.audioNode, mainMixer)]
+            (soundPlayer.audioNode, mainMixer)]
         
         Logger.debug("Connecting input chain")
         inputChain.forEach {
