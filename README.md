@@ -35,15 +35,8 @@ with microphones.
 ```swift
 import Hume
 
-let humeClient = await HumeClient(
-    options: .accessToken(tokenProvider: {
-        do {
-            return try await myAuthProvider.humeAccessToken
-        } catch {
-            Logger.error("error fetching hume access token")
-            throw error
-        }
-    }))
+let token = try await myAccessTokenClient.fetchAccessToken()
+humeClient = HumeClient(options: .accessToken(token: token))
 
 let voiceProvider = VoiceProvider(client: humeClient)
 voiceProvider.delegate = myDelegate
