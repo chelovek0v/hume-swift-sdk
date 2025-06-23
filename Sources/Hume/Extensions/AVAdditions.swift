@@ -59,13 +59,13 @@ extension AVAudioSession.RecordPermission {
 
 // MARK: - Pretty printing
 // Protocol declaration
-protocol Prettifiable {
+internal protocol Prettifiable {
     var prettyPrinted: String { get }
 }
 
 // Extension for AVAudioConverter
 extension AVAudioConverter: Prettifiable {
-    public var prettyPrinted: String {
+    internal var prettyPrinted: String {
         var description = "AVAudioConverter Properties:\n"
         description += "Input Format: \(inputFormat)\n"
         description += "Output Format: \(outputFormat)\n"
@@ -81,7 +81,7 @@ extension AVAudioConverter: Prettifiable {
 
 // Extension for AVAudioNode
 extension AVAudioNode: Prettifiable {
-    public var prettyPrinted: String {
+    internal var prettyPrinted: String {
         var description = "AVAudioNode Properties:\n"
         description += "Engine: \(engine?.description ?? "nil")\n"
         description += "Input format: \(inputFormat(forBus: 0))\n"
@@ -98,7 +98,7 @@ extension AVAudioNode: Prettifiable {
 
 // Extension for AVAudioFormat
 extension AVAudioFormat: Prettifiable {
-    public var prettyPrinted: String {
+    internal var prettyPrinted: String {
         var description = "AVAudioFormat Properties:\n"
         description += "Sample Rate: \(sampleRate)\n"
         description += "Channel Count: \(channelCount)\n"
@@ -115,7 +115,7 @@ extension AVAudioFormat: Prettifiable {
 
 // Adding a description to AVAudioCommonFormat for readability
 extension AVAudioCommonFormat: @retroactive CustomStringConvertible {
-    public var description: String {
+    internal var description: String {
         switch self {
         case .pcmFormatFloat32: return "PCM Float32"
         case .pcmFormatFloat64: return "PCM Float64"
@@ -128,7 +128,7 @@ extension AVAudioCommonFormat: @retroactive CustomStringConvertible {
 }
 
 extension AVAudioEngine: Prettifiable {
-    public var prettyPrinted: String {
+    internal var prettyPrinted: String {
         var description = "AVAudioEngine Configuration:\n"
         
         description += "\nInput Node:\n"
