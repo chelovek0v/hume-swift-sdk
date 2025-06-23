@@ -102,7 +102,7 @@ extension AVAudioFormat: Prettifiable {
         var description = "AVAudioFormat Properties:\n"
         description += "Sample Rate: \(sampleRate)\n"
         description += "Channel Count: \(channelCount)\n"
-        description += "Common Format: \(commonFormat.description)\n"
+        description += "Common Format: \(commonFormat.readableDescription)\n"
         description += "Interleaved: \(isInterleaved)\n"
         if let layout = channelLayout {
             description += "Channel Layout: \(layout.description)\n"
@@ -113,9 +113,9 @@ extension AVAudioFormat: Prettifiable {
     }
 }
 
-// Adding a description to AVAudioCommonFormat for readability
-extension AVAudioCommonFormat: @retroactive CustomStringConvertible {
-    internal var description: String {
+// Adding readable description for AVAudioCommonFormat for internal debugging
+internal extension AVAudioCommonFormat {
+    var readableDescription: String {
         switch self {
         case .pcmFormatFloat32: return "PCM Float32"
         case .pcmFormatFloat64: return "PCM Float64"
