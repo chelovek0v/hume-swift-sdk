@@ -7,7 +7,9 @@
 
 import Foundation
 
-
+/// Temporary settings applied to the current chat session.
+///
+/// Read more about [Session Settings](https://dev.hume.ai/docs/empathic-voice-interface-evi/configuration/session-settings) in the Hume documentation.
 public struct SessionSettings: Codable {
     public let customSessionId: String?
     public let audio: AudioConfiguration?
@@ -18,11 +20,11 @@ public struct SessionSettings: Codable {
     public let variables: [String: String]
     
     public init(
-        customSessionId: String?,
-        audio: AudioConfiguration?,
-        languageModelApiKey: String?,
-        systemPrompt: String?,
-        tools: [Tool]?,
+        customSessionId: String? = nil,
+        audio: AudioConfiguration? = nil,
+        languageModelApiKey: String? = nil,
+        systemPrompt: String? = nil,
+        tools: [Tool]? = nil,
         variables: [String: String] = [:]
     ) {
         self.customSessionId = customSessionId
@@ -35,19 +37,23 @@ public struct SessionSettings: Codable {
     }
 }
 
-public extension SessionSettings {
-    static func withAudioConfiguration(
-        _ audioConfiguration: AudioConfiguration,
+// MARK: - SessionSettings Copy Extension
+extension SessionSettings {
+    func copy(
         customSessionId: String? = nil,
+        audio: AudioConfiguration? = nil,
         languageModelApiKey: String? = nil,
         systemPrompt: String? = nil,
         tools: [Tool]? = nil,
-        variables: [String: String] = [:]) -> SessionSettings {
-        return SessionSettings(customSessionId: customSessionId,
-                               audio: audioConfiguration,
-                               languageModelApiKey: languageModelApiKey,
-                               systemPrompt: systemPrompt,
-                               tools: tools,
-                               variables: variables)
+        variables: [String: String]? = nil
+    ) -> SessionSettings {
+        return SessionSettings(
+            customSessionId: customSessionId ?? self.customSessionId,
+            audio: audio ?? self.audio,
+            languageModelApiKey: languageModelApiKey ?? self.languageModelApiKey,
+            systemPrompt: systemPrompt ?? self.systemPrompt,
+            tools: tools ?? self.tools,
+            variables: variables ?? self.variables
+        )
     }
 }

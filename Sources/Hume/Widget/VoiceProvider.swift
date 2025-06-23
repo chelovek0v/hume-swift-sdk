@@ -48,9 +48,8 @@ public class VoiceProvider: VoiceProvidable {
     ///   - configId: The unique identifier for an EVI configuration.
     ///   - configVersion: Include this parameter to apply a specific version of an EVI configuration. If omitted, the latest version will be applied.
     ///   - resumedChatGroupId: The unique identifier for a Chat Group. Use this field to preserve context from a previous Chat session.
-    ///   - sessionSettings: Defines the session settings for the connection.
-    ///   - eviVersion: The version of EVI to use.
-    public func connect(configId: String?, configVersion: String?, resumedChatGroupId: String?, sessionSettings: SessionSettings, eviVersion: EviVersion) async throws {
+    ///   - sessionSettings: Defines the session settings for the connection. Setting the `audio` configuration to `nil` will enable `VoiceProvider` to configure this automatically.
+    public func connect(configId: String?, configVersion: String?, resumedChatGroupId: String?, sessionSettings: SessionSettings) async throws {
         Logger.info("Connecting voice provider. configId: \(String(describing: configId)), configVersion: \(String(describing: configVersion)), resumedChatGroupId: \(String(describing: resumedChatGroupId))")
         if stateSubject.value == .disconnecting {
             // need to wait to finish disconnecting
@@ -61,12 +60,20 @@ public class VoiceProvider: VoiceProvidable {
         stateSubject.send(.connecting)
         audioHub.microphoneDataChunkHandler = handleMicrophoneData(_:averagePower:)
         if audioHub.stateSubject.value == .unconfigured {
-            try await audioHub.configure(eviVersion: eviVersion)
-        } else {
-            await audioHub.setEviVersion(eviVersion)
+            try await audioHub.configure()
         }
         
-        try await withCheckedThrowingContinuation { continuation in
+        var defaultedSessionSettings: SessionSettings? = nil
+        if sessionSettings.audio == nil {
+            defaultedSessionSettings = sessionSettings.copy(
+                audio: AudioConfiguration(
+                    channels: 1,
+                    encoding: .linear16,
+                    sampleRate: Int(Constants.SampleRate))
+            )
+        }
+        
+        try await withCheckedThrowingContinuation { [defaultedSessionSettings] continuation in
             // open socket
             Task {
                 self.socket = try? await self.humeClient.empathicVoice.chat
@@ -79,9 +86,9 @@ public class VoiceProvider: VoiceProvidable {
                             guard let self = self else { return }
                             Task {
                                 do {
-                                    Logger.info("Volice provider listening for events")
+                                    Logger.info("Voice provider listening for events")
                                     self.startListeningForEvents()
-                                    try await self.sendSessionSettings(message: sessionSettings)
+                                    try await self.sendSessionSettings(message: defaultedSessionSettings ?? sessionSettings)
                                     
                                     Logger.info("Waiting for audio hub to be ready")
                                     try await self.audioHub.state.waitFor(.running)

@@ -16,7 +16,7 @@ public protocol VoiceProvidable {
     
     /// Connects the VoiceProvider to the backend and prepares audio streaming.
     /// - Throws: `VoiceProviderError` for connection, configuration, or audio errors.
-    @MainActor func connect(configId: String?, configVersion: String?, resumedChatGroupId: String?, sessionSettings: SessionSettings, eviVersion: EviVersion) async throws
+    @MainActor func connect(configId: String?, configVersion: String?, resumedChatGroupId: String?, sessionSettings: SessionSettings) async throws
     /// Disconnects the VoiceProvider and stops audio streaming.
     @MainActor func disconnect() async
     

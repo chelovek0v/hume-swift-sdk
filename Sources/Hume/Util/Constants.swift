@@ -18,18 +18,4 @@ enum Constants {
     static let DefaultAudioFormat = AudioFormat.PCM_16BIT
     static let MinimumBufferSize = 128
     static let MaximumBufferSize = 4096
-    
-    static var DefaultAudioOutputFormatEvi2: AVAudioFormat {
-        AVAudioFormat(commonFormat: DefaultAudioFormat.commonFormat,
-                      sampleRate: 24000,
-                      channels: 1,
-                      interleaved: false)!
-    }
-    
-    static var DefaultAudioOutputFormatEvi3: AVAudioFormat {
-        AVAudioFormat(commonFormat: DefaultAudioFormat.commonFormat,
-                      sampleRate: 44000,
-                      channels: 1,
-                      interleaved: false)!
-    }
 }
