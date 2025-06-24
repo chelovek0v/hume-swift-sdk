@@ -17,9 +17,5 @@ public class EmpathicVoice {
     }
     
     public lazy var chat: Chat = { Chat(options: options) }()
-    
-    public lazy var chats: Chats = { Chats() }()
-    
-    public lazy var tools: Tools = { Tools() }()
 
 }
