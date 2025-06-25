@@ -89,7 +89,7 @@ class AudioSession {
 
         do {
             try audioSession.setPreferredIOBufferDuration(Constants.InputBufferDuration)  //20 ms as per EVI docs
-            try audioSession.setPreferredSampleRate(Constants.SampleRate) //16k or 48k for voice processing //AudioConstants.SampleRate)
+            try audioSession.setPreferredSampleRate(Constants.SampleRate)
             
             registerAVObservers()
             Logger.info("Audio session configured successfully")

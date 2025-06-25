@@ -81,13 +81,13 @@ private class RawAudioPlayer {
     func clearQueue() {
         syncQueue.sync {
             audioQueue.removeAll()
+            isStartingPlayback = true
+            wasSilenceLastTime = true
+            previousClip = nil
+            
+            Logger.debug("Queue Cleared: Reset to initial state")
         }
         
-        isStartingPlayback = true
-        wasSilenceLastTime = true
-        previousClip = nil
-        
-        Logger.debug("Queue Cleared: Reset to initial state")
     }
 
     private func supplyAudioData(isSilence: UnsafeMutablePointer<ObjCBool>,

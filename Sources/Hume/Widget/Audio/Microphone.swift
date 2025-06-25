@@ -53,7 +53,7 @@ internal final class Microphone: NSObject {
         try enableVoiceProcessing(inputNode: inputNode, outputNode: outputNode)
 #endif
 
-        Logger.info("Mic configuration complete with EQ")
+        Logger.info("Mic configuration complete")
     }
 
     // MARK: - Interface
