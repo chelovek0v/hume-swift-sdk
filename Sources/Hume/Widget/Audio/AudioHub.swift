@@ -199,13 +199,12 @@ public class AudioHubImpl: AudioHub {
 
         microphoneDataChunkHandler = nil
         soundPlayer?.clearQueue()
-        disconnectAudioGraph()
         
-        soundPlayer = nil
         if audioEngine.isRunning {
             Logger.debug("Stopping audio engine")
             audioEngine.stop()
         }
+        
         try audioSession.stop(configuration: .voiceChat)
         await stateSubject.send(.stopped)
     }
@@ -289,18 +288,17 @@ public class AudioHubImpl: AudioHub {
 
 extension AudioHubImpl: AudioSessionDelegate {
     func audioEngineDidChangeConfiguration() {
-//        Logger.info("AudioHubImpl responding to audio engine configuration change")
-//        microphoneQueue.async { [weak self] in
-//            Task {
-//                guard let self else { assertionFailure("AudioHub is missing self"); return }
-//                Logger.info("Reconfiguring audio gear")
-//                try? await self.reconfigure()
-//            }
-//        }
+        Logger.info("AudioHubImpl responding to audio engine configuration change")
+        microphoneQueue.async { [weak self] in
+            Task {
+                guard let self else { assertionFailure("AudioHub is missing self"); return }
+                try? await self.reconfigure()
+            }
+        }
     }
     
     private func reconfigure() async throws {
-        guard await stateSubject.value != .configuring else {
+        guard await stateSubject.value != .configuring, soundPlayer != nil else {
             Logger.warn("attempted to reconfigure while audio hub is configuring")
             return
         }
