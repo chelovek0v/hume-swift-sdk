@@ -144,6 +144,7 @@ public class AudioHubImpl: AudioHub {
                                              audioFormat: Constants.DefaultAudioFormat)
             
             self.microphone.onChunk = handleMicrophoneDataChunk
+            connectAudioEngineInputs()
         } catch {
             await stateSubject.send(.unconfigured)
             throw error
@@ -228,34 +229,16 @@ public class AudioHubImpl: AudioHub {
             return
         }
         soundPlayer = SoundPlayer(inputFormat: inputFormat, outputFormat: outputNode.outputFormat(forBus: 0))
-        configureAudioGraph()
+        
+        guard let soundPlayer else {
+            Logger.error("Sound player is not initialized")
+            return
+        }
+        connectAudioEngineOutputs(outputFormat: outputNode.outputFormat(forBus: 0))
     }
     
     // MARK: - Connections
-    private func configureAudioGraph() {
-        Logger.info("Connecting audio graph together")
-        guard let soundPlayer else {
-            Logger.error("Sound player is not initialized")
-            return
-        }
-        let inputFormat = microphone.inputFormat
-        let outputFormat = outputNode.outputFormat(forBus: 0)
-        
-        // attach
-        audioEngine.attach(microphone.sinkNode)
-        audioEngine.attach(soundPlayer.audioNode)
-        
-        connectAudioGraph(inputFormat, outputFormat)
-
-        Logger.info(audioEngine.prettyPrinted)
-    }
-    
     private func disconnectAudioGraph() {
-        guard let soundPlayer else {
-            Logger.error("Sound player is not initialized")
-            return
-        }
-        
         Logger.info("Disconnecting audio graph")
         if let inputNode {
             audioEngine.disconnectNodeOutput(inputNode)
@@ -263,32 +246,27 @@ public class AudioHubImpl: AudioHub {
             Logger.warn("missing input node while disconnecting audio graph")
         }
         
-        audioEngine.disconnectNodeOutput(soundPlayer.audioNode)
+        if let soundPlayer {
+            audioEngine.disconnectNodeOutput(soundPlayer.audioNode)
+        } else {
+            Logger.warn("missing output node while disconnecting audio graph")
+        }
     }
     
-    private func connectAudioGraph(_ inputFormat: AVAudioFormat?, _ outputFormat: AVAudioFormat?) {
+    private func connectAudioEngineInputs() {
+        Logger.debug("Connecting input chain")
+        audioEngine.attach(microphone.sinkNode)
+        audioEngine.connect(inputNode, to: microphone.sinkNode, format: nil)
+    }
+    
+    private func connectAudioEngineOutputs(outputFormat: AVAudioFormat?) {
         guard let soundPlayer else {
             Logger.error("Sound player is not initialized")
             return
         }
-        
+        audioEngine.attach(soundPlayer.audioNode)
         let actualOutputFormat = outputFormat
-
-        let inputChain: [(AVAudioNode, AVAudioNode)] = [
-            (inputNode, microphone.sinkNode)]
-        
-        let outputChain: [(AVAudioNode, AVAudioNode)] = [
-            (soundPlayer.audioNode, mainMixer)]
-        
-        Logger.debug("Connecting input chain")
-        inputChain.forEach {
-            audioEngine.connect($0.0, to: $0.1, format: nil)
-        }
-        
-        Logger.debug("Connecting output chain")
-        outputChain.forEach {
-            audioEngine.connect($0.0, to: $0.1, format: actualOutputFormat)
-        }
+        audioEngine.connect(soundPlayer.audioNode, to: mainMixer, format: actualOutputFormat)
     }
     
     // MARK: - Handlers
@@ -311,14 +289,14 @@ public class AudioHubImpl: AudioHub {
 
 extension AudioHubImpl: AudioSessionDelegate {
     func audioEngineDidChangeConfiguration() {
-        Logger.info("AudioHubImpl responding to audio engine configuration change")
-        microphoneQueue.async { [weak self] in
-            Task {
-                guard let self else { assertionFailure("AudioHub is missing self"); return }
-                Logger.info("Reconfiguring audio gear")
-                try? await self.reconfigure()
-            }
-        }
+//        Logger.info("AudioHubImpl responding to audio engine configuration change")
+//        microphoneQueue.async { [weak self] in
+//            Task {
+//                guard let self else { assertionFailure("AudioHub is missing self"); return }
+//                Logger.info("Reconfiguring audio gear")
+//                try? await self.reconfigure()
+//            }
+//        }
     }
     
     private func reconfigure() async throws {
@@ -331,8 +309,9 @@ extension AudioHubImpl: AudioSessionDelegate {
         audioEngine.stop()
         
         disconnectAudioGraph()
-        connectAudioGraph(microphone.inputFormat, outputNode.outputFormat(forBus: 0))
-        
+        connectAudioEngineInputs()
+        connectAudioEngineOutputs(outputFormat: outputNode.outputFormat(forBus: 0))
+
         if await stateSubject.value == .running {
             // only start back up if we're running
             try? audioEngine.start()

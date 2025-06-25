@@ -11,14 +11,11 @@ import AVFoundation
 extension AudioSession {
     enum Configuration {
         case voiceChat
-        case soundPreview
         
         var category: AVAudioSession.Category {
             switch self {
             case .voiceChat:
                 return .playAndRecord
-            case .soundPreview:
-                return .playback
             }
         }
         
@@ -37,7 +34,6 @@ extension AudioSession {
         var mode: AVAudioSession.Mode {
             switch self {
             case .voiceChat: .videoChat
-            case .soundPreview: .moviePlayback
             }
         }
     }
