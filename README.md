@@ -5,12 +5,6 @@
   <p>
     <strong>Integrate Hume APIs directly into your Swift application</strong>
   </p>
-
-  <br>
-  <div>
-    <a href="https://buildwithfern.com/"><img src="https://img.shields.io/badge/%F0%9F%8C%BF-SDK%20generated%20by%20Fern-brightgreen">     
-  </div>
-  <br>
 </div>
 
 ## Documentation
