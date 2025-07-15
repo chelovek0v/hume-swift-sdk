@@ -194,15 +194,17 @@ extension VoiceProvider {
                             self.handleIncomingEvent(event)
                         }
                     } catch let error as StreamSocketError {
-                        if case .closed = error {
-                            Logger.info("Event subscription received closed code")
+                        switch error {
+                        case .connectionError, .transportError:
+                            Logger.error("Error receiving messages: \(error). Disconnecting...")
                             Task { await self.disconnect() }
-                        } else {
-                            Logger.error("Error receiving messages: \(error)")
-                            Task { await self.disconnect() }
+                        case .closed, .disconnected:
+                            Logger.debug("Event subscription received \(error.rawValue) code. Disconnecting...")
+                        case .encodingError, .decodingError:
+                            Logger.warn("Event subscription received \(error.rawValue) code")
                         }
                     } catch {
-                        Logger.error("Error receiving messages: \(error)")
+                        Logger.error("Unknown error receiving messages: \(error). Disconnecting...")
                         Task { await self.disconnect() }
                     }
                 }

@@ -11,6 +11,7 @@ import Foundation
 public enum SubscribeEvent: Decodable {
     case assistantEnd(AssistantEnd)
     case assistantMessage(AssistantMessage)
+    case assistantProsodyMessage(AssistantProsodyMessage)
     case audioOutput(AudioOutput)
     case chatMetadata(ChatMetadata)
     case webSocketError(WebSocketError)
@@ -31,6 +32,8 @@ public enum SubscribeEvent: Decodable {
             return "assistant_end"
         case .assistantMessage:
             return "assistant_message"
+        case .assistantProsodyMessage:
+            return "assistant_prosody"
         case .audioOutput:
             return "audio_output"
         case .chatMetadata:
@@ -61,6 +64,8 @@ public enum SubscribeEvent: Decodable {
             self = .assistantEnd(try AssistantEnd(from: decoder))
         case "assistant_message":
             self = .assistantMessage(try AssistantMessage(from: decoder))
+        case "assistant_prosody":
+            self = .assistantProsodyMessage(try AssistantProsodyMessage(from: decoder))
         case "audio_output":
             self = .audioOutput(try AudioOutput(from: decoder))
         case "chat_metadata":
