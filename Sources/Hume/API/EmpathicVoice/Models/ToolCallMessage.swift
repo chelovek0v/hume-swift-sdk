@@ -14,7 +14,7 @@ public struct ToolCallMessage: Codable {
     public let toolCallId: String
     public let toolType: ToolType
     public let responseRequired: Bool
-    public let type: String?
+    public let type: String
     public let customSessionId: String?
 
     public init(name: String,
@@ -29,7 +29,7 @@ public struct ToolCallMessage: Codable {
         self.toolCallId = toolCallId
         self.toolType = toolType
         self.responseRequired = responseRequired
-        self.type = type
+        self.type = type ?? "tool_call"
         self.customSessionId = customSessionId
     }
 }

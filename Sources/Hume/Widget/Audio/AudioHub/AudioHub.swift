@@ -12,6 +12,9 @@ import Combine
 public enum AudioHubError: Error {
     case audioSessionConfigError
     case soundPlayerDecodingError
+    case soundPlayerInitializationError
+    case headerMissing
+    case notRunning
     case outputFormatError
 }
 
@@ -25,9 +28,9 @@ public protocol AudioHub {
     var state: AnyPublisher<AudioHubState, Never> { get }
     var stateSubject: CurrentValueSubject<AudioHubState, Never> { get }
 
-    func configure() async throws
+    func configure(with config: AudioHubConfiguration) async throws
     
-    func enqueue(soundClip: SoundClip)
+    func enqueue(soundClip: SoundClip) async throws
     
     func start() async throws
     func stop() async throws
@@ -36,33 +39,18 @@ public protocol AudioHub {
     func muteMic(_ mute: Bool)
 }
 
-public enum AudioHubState {
-    case unconfigured
-    case configuring
-    case stopped
-    case starting
-    case running
-    case stopping
-}
-
 public protocol AudioHubDelegate {
     func audioHub(_ audioHub: AudioHub, did soundClip: SoundClip)
 }
 
 public class AudioHubImpl: AudioHub {
     // MARK: Audio gear
-    private let audioEngine = AVAudioEngine()
+    internal let audioEngine = AVAudioEngine()
     private let audioSession = AudioSession.shared
-    private var soundPlayer: SoundPlayer? {
-        didSet {
-            if let _pendingOutputMeterEnabled, let soundPlayer {
-                isOutputMeteringEnabled = _pendingOutputMeterEnabled
-            }
-        }
-    }
+    private var soundPlayer: SoundPlayer?
     private var microphone: Microphone!
     private var inputNode: AVAudioInputNode!
-    private var mainMixer: AVAudioMixerNode!
+    internal var mainMixer: AVAudioMixerNode!
     private var outputNode: AVAudioOutputNode!
     
     public var microphoneMode: MicrophoneMode {
@@ -70,17 +58,11 @@ public class AudioHubImpl: AudioHub {
             preferredMode: AVCaptureDevice.preferredMicrophoneMode,
             activeMode: AVCaptureDevice.activeMicrophoneMode)
     }
-
-    // MARK: Metering
-    // FIXME: hacky solution to a crash when trying to set this when granting mic permissions. hacked because we're releasing beta, lets clean up the state management for this and incoroporate mic permsission handling in the SDK before public release of SDK.
-    private var _pendingOutputMeterEnabled: Bool?
+    
     public var isOutputMeteringEnabled: Bool = false {
         didSet {
             if let soundPlayer {
                 soundPlayer.meteringNode.isMetering = isOutputMeteringEnabled
-                _pendingOutputMeterEnabled = nil
-            } else {
-                _pendingOutputMeterEnabled = isOutputMeteringEnabled
             }
         }
     }
@@ -106,45 +88,52 @@ public class AudioHubImpl: AudioHub {
     public var stateSubject = CurrentValueSubject<AudioHubState, Never>(.unconfigured)
     
     // MARK: Queues
-    private let microphoneQueue = DispatchQueue(label: "com.humeai-sdk.microphone.queue")
+    private let microphoneQueue = DispatchQueue(label: "\(Constants.Namespace).microphone.queue")
     
+    private let configLock = NSLock()
+
     // MARK: Handlers
     public var microphoneDataChunkHandler: MicrophoneDataChunkBlock?
+    
+    private var activeConfig: AudioHubConfiguration?
     
     /// - parameters:
     /// - microphoneHandler: Callback when microphone data is received. This block is executed on a serial queue to guarantee the sequence of samples
     ///
     /// - throws: `AudioSessionError`, `MicrophoneError`
-    init() {
+    public init() {
         Logger.info("initializing AudioHub")
         audioSession.delegate = self
     }
 
-    public func configure() async throws {
+    public func configure(with config: AudioHubConfiguration) async throws {
         Logger.info("configuring audio hub ")
-        guard case .unconfigured = await stateSubject.value else {
-            Logger.warn("audio hub already configured")
+        guard await stateSubject.value == .unconfigured || activeConfig != config else {
+            Logger.warn("audio hub already configured for \(config)")
             return
         }
+        activeConfig = config
         await stateSubject.send(.configuring)
         
         do {
-            try audioSession.configure()
-            try audioSession.start(for: .voiceChat)
+            try audioSession.configure(with: config)
+            try audioSession.start()
             
             Logger.debug("Creating audio nodes")
-            inputNode = audioEngine.inputNode
             mainMixer = audioEngine.mainMixerNode
             outputNode = audioEngine.outputNode
             
-            Logger.debug("Initializing microphone")
-            self.microphone = try Microphone(audioEngine: audioEngine,
-                                             sampleRate: Constants.SampleRate,
-                                             sampleSize: Constants.SampleSize,
-                                             audioFormat: Constants.DefaultAudioFormat)
-            
-            self.microphone.onChunk = handleMicrophoneDataChunk
-            connectAudioEngineInputs()
+            if config.requiresMicrophone {
+                Logger.debug("Initializing microphone")
+                inputNode = audioEngine.inputNode
+                self.microphone = try Microphone(audioEngine: audioEngine,
+                                                 sampleRate: Constants.SampleRate,
+                                                 sampleSize: Constants.SampleSize,
+                                                 audioFormat: Constants.DefaultAudioFormat)
+                
+                self.microphone.onChunk = handleMicrophoneDataChunk
+                connectAudioEngineInputs()
+            }
         } catch {
             await stateSubject.send(.unconfigured)
             throw error
@@ -153,12 +142,26 @@ public class AudioHubImpl: AudioHub {
         await stateSubject.send(.stopped)
     }
 
-    public func enqueue(soundClip: SoundClip) {
+    public func enqueue(soundClip: SoundClip) async throws {
+        guard await stateSubject.value == .running else {
+           Logger.warn("skipping enqueue because audio hub is not running")
+            throw AudioHubError.notRunning
+           return
+       }
+        
         Logger.info("Adding message to SoundPlayer: \(soundClip.id) (\(soundClip.index)")
-        if soundPlayer == nil, let header = soundClip.header {
-            initializeSoundPlayer(with: header)
+        if let header = soundClip.header {
+            if (soundPlayer != nil && UInt32(soundPlayer?.inputFormat.sampleRate ?? 0) != header.sampleRate) || soundPlayer == nil {
+                initializeSoundPlayer(with: header)
+            }
+        } else if soundPlayer == nil {
+            Logger.warn("SoundClip missing header, no soundplayer")
         }
-        soundPlayer?.enqueueAudio(soundClip: soundClip)
+
+        guard let soundPlayer else {
+            throw AudioHubError.soundPlayerInitializationError
+        }
+        soundPlayer.enqueueAudio(soundClip: soundClip)
     }
     
     public func handleInterruption() {
@@ -171,12 +174,12 @@ public class AudioHubImpl: AudioHub {
     
     public func start() async throws {
         guard [.stopped, .stopping].contains(await stateSubject.value) else {
-            assertionFailure("expected audio hub to be stopped before starting")
+            Logger.warn("attempted to start audio hub from a running state")
             return
         }
         await stateSubject.send(.starting)
         Logger.info("Starting AudioHub")
-        try audioSession.start(for: .voiceChat)
+        try audioSession.start()
         try audioEngine.start()
         await stateSubject.send(.running)
     }
@@ -199,13 +202,13 @@ public class AudioHubImpl: AudioHub {
 
         microphoneDataChunkHandler = nil
         soundPlayer?.clearQueue()
+        soundPlayer = nil
         
         if audioEngine.isRunning {
             Logger.debug("Stopping audio engine")
             audioEngine.stop()
         }
         
-        try audioSession.stop(configuration: .voiceChat)
         await stateSubject.send(.stopped)
     }
     
@@ -220,6 +223,12 @@ public class AudioHubImpl: AudioHub {
     // MARK: - Helpers
     private func initializeSoundPlayer(with header: WAVHeader) {
         Logger.info("Initializing sound player with header: \(header)")
+        guard configLock.try() else {
+            Logger.debug("initialization already in progress, skipping")
+            return
+        }
+        defer { configLock.unlock() }
+        
         guard let inputFormat = AVAudioFormat(commonFormat: Constants.DefaultAudioFormat.commonFormat,
                                         sampleRate: Double(header.sampleRate),
                                         channels: AVAudioChannelCount(header.numChannels),
@@ -228,8 +237,10 @@ public class AudioHubImpl: AudioHub {
             return
         }
         soundPlayer = SoundPlayer(inputFormat: inputFormat, outputFormat: outputNode.outputFormat(forBus: 0))
+        soundPlayer?.meteringNode.isMetering = isOutputMeteringEnabled
+        soundPlayer?.meteringNode.meterListener = outputMeterListener
         
-        guard let soundPlayer else {
+        guard soundPlayer != nil else {
             Logger.error("Sound player is not initialized")
             return
         }
@@ -264,8 +275,13 @@ public class AudioHubImpl: AudioHub {
             return
         }
         audioEngine.attach(soundPlayer.audioNode)
-        let actualOutputFormat = outputFormat
-        audioEngine.connect(soundPlayer.audioNode, to: mainMixer, format: actualOutputFormat)
+        let formatToUse: AVAudioFormat? = {
+            guard let fmt = outputFormat, fmt.channelCount > 0 else {
+                return nil
+            }
+            return fmt
+        }()
+        audioEngine.connect(soundPlayer.audioNode, to: mainMixer, format: formatToUse)
     }
     
     // MARK: - Handlers
@@ -307,7 +323,9 @@ extension AudioHubImpl: AudioSessionDelegate {
         audioEngine.stop()
         
         disconnectAudioGraph()
-        connectAudioEngineInputs()
+        if activeConfig?.requiresMicrophone == true {
+            connectAudioEngineInputs()
+        }
         connectAudioEngineOutputs(outputFormat: outputNode.outputFormat(forBus: 0))
 
         if await stateSubject.value == .running {

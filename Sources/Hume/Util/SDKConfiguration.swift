@@ -1,8 +1,8 @@
 //
-//  BuildEnvironment.swift
+//  SDKConfiguration.swift
 //  Hume
 //
-//  Created by Chris on 6/24/25.
+//  Created by Chris on 6/25/25.
 //
 
 import Foundation

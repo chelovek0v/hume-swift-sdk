@@ -10,7 +10,7 @@ public class VoiceProvider: VoiceProvidable {
     
     private let humeClient: HumeClient
     private var socket: StreamSocket?
-    private let delegateQueue = DispatchQueue(label: "com.humeai-sdk.delegate.queue", qos: .userInteractive)
+    private let delegateQueue = DispatchQueue(label: "\(Constants.Namespace).delegate.queue", qos: .userInteractive)
     private var eventSubscription: Task<(), any Error>?
     
     private var audioHub: AudioHub = AudioHubImpl()
@@ -60,7 +60,7 @@ public class VoiceProvider: VoiceProvidable {
         stateSubject.send(.connecting)
         audioHub.microphoneDataChunkHandler = handleMicrophoneData(_:averagePower:)
         if audioHub.stateSubject.value == .unconfigured {
-            try await audioHub.configure()
+            try await audioHub.configure(with: .voiceChat)
         }
         
         var defaultedSessionSettings: SessionSettings? = nil
@@ -191,7 +191,7 @@ extension VoiceProvider {
                     do {
                         Logger.info("Waiting for events on socket")
                         for try await event in socket.receive() {
-                            self.handleIncomingEvent(event)
+                            try self.handleIncomingEvent(event)
                         }
                     } catch let error as StreamSocketError {
                         switch error {
@@ -213,16 +213,30 @@ extension VoiceProvider {
     }
 
     /// Handles individual incoming events
-    private func handleIncomingEvent(_ event: SubscribeEvent) {
+    private func handleIncomingEvent(_ event: SubscribeEvent) throws {
         switch event {
         case .audioOutput(let audioOutput):
             guard let clip = SoundClip.from(audioOutput) else {
                 Logger.error("Failed to decode audio output")
                 return
             }
-            self.audioHub.enqueue(soundClip: clip)
-            self.delegateQueue.async {
-                self.delegate?.voiceProvider(self, didPlayClip: clip)
+            Task {
+                do {
+                    try await self.audioHub.enqueue(soundClip: clip)
+                    self.delegateQueue.async {
+                        self.delegate?.voiceProvider(self, didPlayClip: clip)
+                    }
+                } catch let error as AudioHubError {
+                    Logger.warn("Failed to enqueue audio output: \(error)")
+                    self.delegateQueue.async {
+                        self.delegate?.voiceProvider(self, didProduceError: .audioHubError(error))
+                    }
+                } catch {
+                    Logger.error("Unknown error while trying to enqueue audio output: \(error)")
+                    self.delegateQueue.async {
+                        self.delegate?.voiceProvider(self, didProduceError: .unknown(error))
+                    }
+                }
             }
         case .userInterruption:
             self.audioHub.handleInterruption()

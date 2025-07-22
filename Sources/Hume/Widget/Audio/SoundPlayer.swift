@@ -8,6 +8,8 @@ import os
 
 public class SoundPlayer {
     private let rawAudioPlayer: RawAudioPlayer
+    let inputFormat: AVAudioFormat
+    
     var audioNode: AVAudioSourceNode {
         rawAudioPlayer.sourceNode.sourceNode
     }
@@ -17,15 +19,14 @@ public class SoundPlayer {
     }
 
     init(inputFormat: AVAudioFormat, outputFormat: AVAudioFormat) {
+        self.inputFormat = inputFormat
         self.rawAudioPlayer = RawAudioPlayer(format: inputFormat)!
         Logger.info("Initializing SoundPlayer with RawAudioPlayer")
     }
 
     func enqueueAudio(soundClip: SoundClip) {
         Logger.info("enqueueAudio called with \(soundClip.audioData.count) bytes of data")
-        Task {
-            rawAudioPlayer.enqueueAudio(clip: soundClip)
-        }
+        rawAudioPlayer.enqueueAudio(data: soundClip.headerlessData())
     }
 
     func clearQueue() {
@@ -38,8 +39,9 @@ public class SoundPlayer {
 // Adjusted RawAudioPlayer with crossfade support
 private class RawAudioPlayer {
     var sourceNode: MeteredAudioSourceNode!
+    fileprivate var isCrossfadeEnabled: Bool = false
     fileprivate var audioQueue: [Data] = []
-    private let syncQueue = DispatchQueue(label: "com.humeai-sdk.audioOutput.queue")
+    private let syncQueue = DispatchQueue(label: "\(Constants.Namespace).audioOutput.queue")
     private let format: AVAudioFormat
 
     // Fade-in/out config
@@ -50,31 +52,29 @@ private class RawAudioPlayer {
     // Crossfade configuration
     // Similar logic as fade-in can be applied, but we do it at enqueue time
     private let crossfadeLength = 1024
-    private var previousClip: SoundClip?
 
     init?(format: AVAudioFormat) {
         self.format = format
         sourceNode = MeteredAudioSourceNode(format: format, renderBlock: supplyAudioData)
     }
 
-    func enqueueAudio(clip: SoundClip) {
+    func enqueueAudio(data: Data) {
         syncQueue.sync {
-            let clipData = clip.audioData
-
-            // Check for potential consecutive clip crossfade
-            if let lastData = audioQueue.last {
-                if let crossfadedData = crossfadeAudioData(oldData: lastData,
-                                                           newData: clipData,
-                                                           crossfadeSamples: crossfadeLength) {
-                    // Replace last queued data with crossfaded result
-                    audioQueue.removeLast()
-                    audioQueue.append(crossfadedData)
-                    return
+            if isCrossfadeEnabled {
+                // Check for potential consecutive clip crossfade
+                if let lastData = audioQueue.last {
+                    if let crossfadedData = crossfadeAudioData(oldData: lastData,
+                                                               newData: data,
+                                                               crossfadeSamples: crossfadeLength) {
+                        // Replace last queued data with crossfaded result
+                        audioQueue.removeLast()
+                        audioQueue.append(crossfadedData)
+                        return
+                    }
                 }
             }
 
-            audioQueue.append(clipData)
-            previousClip = clip
+            audioQueue.append(data)
         }
     }
 
@@ -83,7 +83,6 @@ private class RawAudioPlayer {
             audioQueue.removeAll()
             isStartingPlayback = true
             wasSilenceLastTime = true
-            previousClip = nil
             
             Logger.debug("Queue Cleared: Reset to initial state")
         }
