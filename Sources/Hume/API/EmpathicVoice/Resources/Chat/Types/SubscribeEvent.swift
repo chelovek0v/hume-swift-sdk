@@ -26,33 +26,21 @@ public enum SubscribeEvent: Decodable {
         case type
     }
     
-    var debugName: String {
+    public var type: String {
         switch self {
-        case .assistantEnd:
-            return "assistant_end"
-        case .assistantMessage:
-            return "assistant_message"
-        case .assistantProsodyMessage:
-            return "assistant_prosody"
-        case .audioOutput:
-            return "audio_output"
-        case .chatMetadata:
-            return "chat_metadata"
-        case .webSocketError:
-            return "web_socket_error"
-        case .userInterruption:
-            return "user_interruption"
-        case .userMessage:
-            return "user_message"
-        case .toolCallMessage:
-            return "tool_call"
-        case .toolResponseMessage:
-            return "tool_response"
-        case .toolErrorMessage:
-            return "tool_error"
+        case .assistantEnd(let msg): msg.type
+        case .assistantMessage(let msg): msg.type
+        case .assistantProsodyMessage(let msg): msg.type
+        case .audioOutput(let msg): msg.type
+        case .chatMetadata(let msg): msg.type
+        case .webSocketError(let msg): msg.type
+        case .userInterruption(let msg): msg.type
+        case .userMessage(let msg): msg.type
+        case .toolCallMessage(let msg): msg.type
+        case .toolResponseMessage(let msg): msg.type
+        case .toolErrorMessage(let msg): msg.type
         }
     }
-    
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)

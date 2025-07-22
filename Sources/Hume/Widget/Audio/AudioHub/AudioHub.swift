@@ -210,7 +210,6 @@ public class AudioHubImpl: AudioHub {
         }
         
         await stateSubject.send(.stopped)
-        try audioSession.stop()
     }
     
     public func muteMic(_ mute: Bool) {
