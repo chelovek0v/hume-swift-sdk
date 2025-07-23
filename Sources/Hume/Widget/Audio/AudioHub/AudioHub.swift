@@ -22,6 +22,8 @@ public protocol AudioHub {
     var outputMeterListener: ((Float) -> Void)? { get set }
     var isOutputMeteringEnabled: Bool { get set }
     
+    /// Gets the current `MicrophoneMode`. The value of `preferredMode` can be used to determine if `.voiceIsolation` is active.
+    /// To update the microphone mode, `AVCaptureDevice.showSystemUserInterface(.microphoneModes)` will present the system UI to the user to update. (This requires importing `AVFoundation`).
     var microphoneMode: MicrophoneMode { get }
     var microphoneDataChunkHandler: MicrophoneDataChunkBlock? { get set }
     
