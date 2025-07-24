@@ -9,6 +9,8 @@ import Foundation
 
 /// Represents errors that can occur in the VoiceProvider lifecycle.
 public enum VoiceProviderError: Error {
+    /// VoiceProvider is either attempting to connect or disconnect
+    case connectionBusy
     /// The socket is not connected or was disconnected unexpectedly.
     case socketDisconnected
     /// Failed to initialize the microphone.

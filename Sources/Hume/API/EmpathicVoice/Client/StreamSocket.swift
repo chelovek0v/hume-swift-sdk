@@ -181,9 +181,10 @@ public class StreamSocket {
         do {
             try await webSocketTask.send(message)
         } catch {
-            Logger.error("Error sending message: \(error)\nClose code: \(String(describing: webSocketTask.closeCode))")
+            Logger.debug("Close code: \(String(describing: webSocketTask.closeCode))")
             switch webSocketTask.closeCode {
             case .invalid:
+                Logger.error("Socket connection error", error)
                 throw StreamSocketError.connectionError
                 
             case .goingAway:
@@ -193,6 +194,7 @@ public class StreamSocket {
                 throw StreamSocketError.closed
                 
             default:
+                Logger.error("Stream socket transport error", error)
                 throw StreamSocketError.transportError
             }
         }
