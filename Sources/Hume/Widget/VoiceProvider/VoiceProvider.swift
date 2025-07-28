@@ -10,15 +10,12 @@ public class VoiceProvider: VoiceProvidable {
 
   private let humeClient: HumeClient
   private var socket: StreamSocket?
-  private let connectionQueue = DispatchQueue(
-    label: "\(Constants.Namespace).connection.queue", qos: .userInteractive)
   private let delegateQueue = DispatchQueue(
     label: "\(Constants.Namespace).delegate.queue", qos: .userInteractive)
   private var eventSubscription: Task<(), any Error>?
 
   private var audioHub: AudioHub = AudioHubImpl()
   private var audioHubStateCancellable: AnyCancellable?
-  private let connectionLock = NSLock()
 
   public weak var delegate: (any VoiceProviderDelegate)?
 
@@ -60,6 +57,17 @@ public class VoiceProvider: VoiceProvidable {
     Logger.info(
       "Connecting voice provider. configId: \(String(describing: configId)), configVersion: \(String(describing: configVersion)), resumedChatGroupId: \(String(describing: resumedChatGroupId))"
     )
+    if stateSubject.value == .disconnecting {
+      // need to wait to finish disconnecting
+      Logger.debug("was in the middle of disconnecting, waiting to finish...")
+      try await stateSubject.waitFor(.disconnected)
+      Logger.debug("...disconnected")
+    }
+    stateSubject.send(.connecting)
+    audioHub.microphoneDataChunkHandler = handleMicrophoneData(_:averagePower:)
+    if audioHub.stateSubject.value == .unconfigured {
+      try await audioHub.configure(with: .voiceChat)
+    }
 
     var defaultedSessionSettings: SessionSettings? = nil
     if sessionSettings.audio == nil {
@@ -71,126 +79,79 @@ public class VoiceProvider: VoiceProvidable {
       )
     }
 
-    Logger.debug("acquiring connection lock")
-    guard self.connectionLock.try() else {
-      Logger.warn("Attempted connect while connection lock busy")
-      return
-    }
-    Logger.debug("acquired connection lock")
-
     try await withCheckedThrowingContinuation { [defaultedSessionSettings] continuation in
-      connectionQueue.async { [weak self] in
-        Task {
-          guard let self else {
-            Logger.error("lost self")
-            return
-          }
+      // open socket
+      Task {
+        self.socket = try? await self.humeClient.empathicVoice.chat
+          .connect(
+            configId: configId,
+            configVersion: configVersion,
+            resumedChatGroupId: resumedChatGroupId,
+            onOpen: { [weak self] response in
+              Logger.info("Socket Opened")
+              guard let self = self else { return }
+              Task {
+                do {
+                  Logger.info("Voice provider listening for events")
+                  self.startListeningForEvents()
+                  try await self.sendSessionSettings(
+                    message: defaultedSessionSettings ?? sessionSettings)
 
-          Task { @MainActor in
-            self.stateSubject.send(.connecting)
-          }
-          self.audioHub.microphoneDataChunkHandler = self.handleMicrophoneData(_:averagePower:)
-          if self.audioHub.stateSubject.value == .unconfigured {
-            try await self.audioHub.configure(with: .voiceChat)
-          }
+                  Logger.info("Waiting for audio hub to be ready")
+                  try await self.audioHub.state.waitFor(.running)
 
-          self.socket = try? await self.humeClient.empathicVoice.chat
-            .connect(
-              configId: configId,
-              configVersion: configVersion,
-              resumedChatGroupId: resumedChatGroupId,
-              onOpen: { [weak self] response in
-                Logger.info("Socket Opened")
-                guard let self = self else { return }
-                Task {
-                  do {
-                    Logger.info("Voice provider listening for events")
-                    self.startListeningForEvents()
-                    try await self.sendSessionSettings(
-                      message: defaultedSessionSettings ?? sessionSettings)
-
-                    Logger.info("Waiting for audio hub to be ready")
-                    try await self.audioHub.state.waitFor(.running)
-
-                    Logger.info("Finalizing audio hub configuration")
-                    self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
-                    self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
-                    self.stateSubject.send(.connected)
-
-                    Logger.debug("releasing connection lock")
-                    self.connectionLock.unlock()
-
-                    self.delegateQueue.async {
-                      self.delegate?.voiceProviderDidConnect(self)
-                    }
-                    continuation.resume()
-                    Logger.info("Voice Provider connected successfully")
-                  } catch {
-                    continuation.resume(throwing: error)
-                    Logger.debug("releasing connection lock")
-                    self.connectionLock.unlock()
+                  Logger.info("Finalizing audio hub configuration")
+                  self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
+                  self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
+                  self.stateSubject.send(.connected)
+                  self.delegateQueue.async {
+                    self.delegate?.voiceProviderDidConnect(self)
                   }
+                  continuation.resume()
+                  Logger.info("Voice Provider connected successfully")
+                } catch {
+                  continuation.resume(throwing: error)
                 }
-              },
-              onClose: { [weak self] closeCode, reason in
-                Logger.warn("Socket Closed: \(closeCode). Reason: \(String(describing: reason))")
-                if self?.stateSubject.value == .connected || self?.stateSubject.value == .connecting
-                {
-                  Task { await self?.disconnect() }
-                }
-              },
-              onError: { error, response in
-                Logger.warn("Socket Errored: \(error). Response: \(String(describing: response))")
               }
-            )
-        }
+            },
+            onClose: { [weak self] closeCode, reason in
+              Logger.warn("Socket Closed: \(closeCode). Reason: \(String(describing: reason))")
+              if self?.stateSubject.value == .connected || self?.stateSubject.value == .connecting {
+                Task { await self?.disconnect() }
+              }
+            },
+            onError: { error, response in
+              Logger.warn("Socket Errored: \(error). Response: \(String(describing: response))")
+            }
+          )
       }
     }
   }
 
   public func disconnect() async {
-    connectionQueue.async { [weak self] in
-      Task {
-        guard let self else {
-          Logger.error("lost self")
-          return
-        }
-        guard self.connectionLock.try() else {
-          Logger.warn("Attempted disconnect while connection lock busy")
-          return
-        }
-        Logger.debug("acquired connection lock")
-        defer {
-          Logger.debug("releasing connection lock")
-          self.connectionLock.unlock()
-        }
-        Logger.info("attempting to disconnect voice provider")
-        guard [.connected, .connecting].contains(self.stateSubject.value) else {
-          Logger.info("not connected")
-          return
-        }
-        await MainActor.run { self.stateSubject.send(.disconnecting) }
-        self.delegateQueue.async {
-          self.delegate?.voiceProviderWillDisconnect(self)
-        }
-        Logger.info("Disconnecting voice provider")
-
-        do {
-          try await self.audioHub.stop()
-        } catch {
-          Logger.error("Failed to stop audio hub: \(error)")
-        }
-        self.eventSubscription?.cancel()
-        self.socket?.close()
-        Logger.info("Voice provider disconnected")
-        self.delegateQueue.async {
-          self.delegate?.voiceProviderDidDisconnect(self)
-        }
-        Task { @MainActor in
-          self.stateSubject.send(.disconnected)
-        }
-      }
+    Logger.info("attempting to disconnect voice provider")
+    guard [.connected, .connecting].contains(stateSubject.value) else {
+      Logger.info("not connected")
+      return
     }
+    await MainActor.run { stateSubject.send(.disconnecting) }
+    self.delegateQueue.async {
+      self.delegate?.voiceProviderWillDisconnect(self)
+    }
+    Logger.info("Disconnecting voice provider")
+
+    do {
+      try await self.audioHub.stop()
+    } catch {
+      Logger.error("Failed to stop audio hub: \(error)")
+    }
+    self.eventSubscription?.cancel()
+    self.socket?.close()
+    Logger.info("Voice provider disconnected")
+    self.delegateQueue.async {
+      self.delegate?.voiceProviderDidDisconnect(self)
+    }
+    stateSubject.send(.disconnected)
   }
 
   // MARK: - Controls
@@ -245,7 +206,7 @@ extension VoiceProvider {
               Logger.error("Error receiving messages: \(error). Disconnecting...")
               Task { await self.disconnect() }
             case .closed, .disconnected:
-              Logger.debug("Event subscription received \(error.rawValue) code.")
+              Logger.debug("Event subscription received \(error.rawValue) code. Disconnecting...")
             case .encodingError, .decodingError:
               Logger.warn("Event subscription received \(error.rawValue) code")
             }
