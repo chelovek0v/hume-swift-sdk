@@ -8,7 +8,7 @@
 import Foundation
 
 public class TTSClient {
-    private let networkClient: NetworkClient
+  private let networkClient: NetworkClient
 
   init(networkClient: NetworkClient) {
     self.networkClient = networkClient
