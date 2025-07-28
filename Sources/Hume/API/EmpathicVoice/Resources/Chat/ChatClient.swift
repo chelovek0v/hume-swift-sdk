@@ -8,91 +8,95 @@
 import Foundation
 
 public class Chat: NSObject {
-    
-    private var onOpen: ((URLResponse?) -> Void)? = nil
-    private var onClose: ((Int, String?) -> Void)? = nil
-    private var onError: ((Error, URLResponse?) -> Void)? = nil
-    
-    private let options: HumeClient.Options
-    
-    init(options: HumeClient.Options) {
-        self.options = options
+
+  private var onOpen: ((URLResponse?) -> Void)? = nil
+  private var onClose: ((Int, String?) -> Void)? = nil
+  private var onError: ((Error, URLResponse?) -> Void)? = nil
+
+  private let options: HumeClient.Options
+
+  init(options: HumeClient.Options) {
+    self.options = options
+  }
+
+  public func connect(
+    configId: String? = nil,
+    configVersion: String? = nil,
+    resumedChatGroupId: String? = nil,
+    onOpen: ((URLResponse?) -> Void)? = nil,
+    onClose: ((Int, String?) -> Void)? = nil,
+    onError: ((Error, URLResponse?) -> Void)? = nil
+  ) async throws -> StreamSocket {
+
+    self.onOpen = onOpen
+    self.onClose = onClose
+    self.onError = onError
+
+    let host: String = SDKConfiguration.default.host
+
+    var components = URLComponents(string: "wss://\(host)/v0/evi/chat")
+    let accessToken = try await AccessTokenResolver.resolve(options: options)
+
+    components?.queryItems = [
+      URLQueryItem(name: "accessToken", value: accessToken),
+      URLQueryItem(name: "verbose_transcription", value: String(true)),
+    ]
+    if let configId {
+      components?.queryItems?.append(URLQueryItem(name: "config_id", value: configId))
     }
-    
-    public func connect(
-        configId: String? = nil,
-        configVersion: String? = nil,
-        resumedChatGroupId: String? = nil,
-        onOpen: ((URLResponse?) -> Void)? = nil,
-        onClose: ((Int, String?) -> Void)? = nil,
-        onError: ((Error, URLResponse?) -> Void)? = nil
-    ) async throws -> StreamSocket {
-        
-        self.onOpen = onOpen
-        self.onClose = onClose
-        self.onError = onError
-        
-        let host: String = SDKConfiguration.default.host
-        
-        var components = URLComponents(string: "wss://\(host)/v0/evi/chat")
-        let accessToken = try await AccessTokenResolver.resolve(options: options)
-        
-        components?.queryItems = [
-            URLQueryItem(name: "accessToken", value: accessToken),
-            URLQueryItem(name: "verbose_transcription", value: String(true)),
-        ]
-        if let configId {
-            components?.queryItems?.append(URLQueryItem(name: "config_id", value: configId))
-        }
-        if let configVersion {
-            components?.queryItems?.append(URLQueryItem(name: "config_version", value: configVersion))
-        }
-        if let resumedChatGroupId {
-            components?.queryItems?.append(URLQueryItem(name: "resumed_chat_group_id", value: resumedChatGroupId))
-        }
-        
-        let url = components!.url!
-        
-        var request = URLRequest(url: url)
-        
-        
-        request.addValue("swift_sdk", forHTTPHeaderField: "X-Hume-Client-Name")
-        
-        
-        let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
-        let webSocketTask = session.webSocketTask(with: request)
-        
-        return StreamSocket(webSocketTask: webSocketTask)
+    if let configVersion {
+      components?.queryItems?.append(URLQueryItem(name: "config_version", value: configVersion))
     }
-    
+    if let resumedChatGroupId {
+      components?.queryItems?.append(
+        URLQueryItem(name: "resumed_chat_group_id", value: resumedChatGroupId))
+    }
+
+    let url = components!.url!
+
+    var request = URLRequest(url: url)
+
+    request.addValue("swift_sdk", forHTTPHeaderField: "X-Hume-Client-Name")
+
+    let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+    let webSocketTask = session.webSocketTask(with: request)
+
+    return StreamSocket(webSocketTask: webSocketTask)
+  }
+
 }
 
-
 extension Chat: URLSessionWebSocketDelegate {
-    open func urlSession(_ session: URLSession,
-                         webSocketTask: URLSessionWebSocketTask,
-                         didOpenWithProtocol protocol: String?) {
-        self.onOpen?(webSocketTask.response)
-    }
-    
-    open func urlSession(_ session: URLSession,
-                         webSocketTask: URLSessionWebSocketTask,
-                         didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
-                         reason: Data?) {
-        let closeCode = closeCode.rawValue
-        let reason = reason.flatMap { String(data: $0, encoding: .utf8) }
-        
-        self.onClose?(closeCode, reason)
-    }
-    
-    open func urlSession(_ session: URLSession,
-                         task: URLSessionTask,
-                         didCompleteWithError error: Error?) {
-        // The task has terminated. Inform the delegate that the transport has closed abnormally
-        // if this was caused by an error.
-        guard let err = error else { return }
-        
-        self.onError?(err, task.response)
-    }
-    
+  open func urlSession(
+    _ session: URLSession,
+    webSocketTask: URLSessionWebSocketTask,
+    didOpenWithProtocol protocol: String?
+  ) {
+    self.onOpen?(webSocketTask.response)
+  }
+
+  open func urlSession(
+    _ session: URLSession,
+    webSocketTask: URLSessionWebSocketTask,
+    didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+    reason: Data?
+  ) {
+    let closeCode = closeCode.rawValue
+    let reason = reason.flatMap { String(data: $0, encoding: .utf8) }
+
+    self.onClose?(closeCode, reason)
+  }
+
+  open func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didCompleteWithError error: Error?
+  ) {
+    // The task has terminated. Inform the delegate that the transport has closed abnormally
+    // if this was caused by an error.
+    guard let err = error else { return }
+
+    self.onError?(err, task.response)
+  }
+
 }

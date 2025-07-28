@@ -8,5 +8,5 @@
 import Foundation
 
 public enum HumeError: Error {
-    case invalidType(String)
+  case invalidType(String)
 }

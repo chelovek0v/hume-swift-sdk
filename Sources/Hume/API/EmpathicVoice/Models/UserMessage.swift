@@ -7,29 +7,30 @@
 
 import Foundation
 
+public struct UserMessage: Codable {
+  public let fromText: Bool
+  public let message: ChatMessage
+  public let models: Inference
+  public let customSessionId: String?
+  public let time: MillisecondInterval
+  public let type: String
+  public let interim: Bool
 
-public struct UserMessage: Codable {    
-    public let fromText: Bool
-    public let message: ChatMessage
-    public let models: Inference
-    public let customSessionId: String?
-    public let time: MillisecondInterval
-    public let type: String
-    public let interim: Bool
-
-    public init(fromText: Bool,
-                message: ChatMessage,
-                models: Inference,
-                customSessionId: String?,
-                time: MillisecondInterval,
-                type: String,
-                interim: Bool) {
-        self.fromText = fromText
-        self.message = message
-        self.models = models
-        self.customSessionId = customSessionId
-        self.time = time
-        self.type = type
-        self.interim = interim
-    }
+  public init(
+    fromText: Bool,
+    message: ChatMessage,
+    models: Inference,
+    customSessionId: String?,
+    time: MillisecondInterval,
+    type: String,
+    interim: Bool
+  ) {
+    self.fromText = fromText
+    self.message = message
+    self.models = models
+    self.customSessionId = customSessionId
+    self.time = time
+    self.type = type
+    self.interim = interim
+  }
 }

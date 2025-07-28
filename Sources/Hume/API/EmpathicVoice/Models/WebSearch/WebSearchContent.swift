@@ -8,15 +8,15 @@
 import Foundation
 
 public struct WebSearchContent: Codable {
-    public let summary: String?
-    public let references: [WebSearchReference]
+  public let summary: String?
+  public let references: [WebSearchReference]
 }
 
-public extension WebSearchContent {
-    static func from(toolResponseMessage: ToolResponseMessage) -> WebSearchContent? {
-        guard let data = toolResponseMessage.content.data(using: .utf8) else {
-            return nil
-        }
-        return try? JSONDecoder().decode(WebSearchContent.self, from: data)
+extension WebSearchContent {
+  public static func from(toolResponseMessage: ToolResponseMessage) -> WebSearchContent? {
+    guard let data = toolResponseMessage.content.data(using: .utf8) else {
+      return nil
     }
+    return try? JSONDecoder().decode(WebSearchContent.self, from: data)
+  }
 }

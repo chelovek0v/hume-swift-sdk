@@ -8,6 +8,6 @@
 import Foundation
 
 public enum PaginationDirection: String, Codable {
-    case asc
-    case desc
+  case asc
+  case desc
 }

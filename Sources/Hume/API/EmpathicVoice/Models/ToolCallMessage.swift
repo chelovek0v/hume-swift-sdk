@@ -9,27 +9,29 @@ import Foundation
 
 public struct ToolCallMessage: Codable {
 
-    public let name: String
-    public let parameters: String
-    public let toolCallId: String
-    public let toolType: ToolType
-    public let responseRequired: Bool
-    public let type: String
-    public let customSessionId: String?
+  public let name: String
+  public let parameters: String
+  public let toolCallId: String
+  public let toolType: ToolType
+  public let responseRequired: Bool
+  public let type: String
+  public let customSessionId: String?
 
-    public init(name: String,
-                parameters: String,
-                toolCallId: String,
-                toolType: ToolType,
-                responseRequired: Bool,
-                type: String?,
-                customSessionId: String?) {
-        self.name = name
-        self.parameters = parameters
-        self.toolCallId = toolCallId
-        self.toolType = toolType
-        self.responseRequired = responseRequired
-        self.type = type ?? "tool_call"
-        self.customSessionId = customSessionId
-    }
+  public init(
+    name: String,
+    parameters: String,
+    toolCallId: String,
+    toolType: ToolType,
+    responseRequired: Bool,
+    type: String?,
+    customSessionId: String?
+  ) {
+    self.name = name
+    self.parameters = parameters
+    self.toolCallId = toolCallId
+    self.toolType = toolType
+    self.responseRequired = responseRequired
+    self.type = type ?? "tool_call"
+    self.customSessionId = customSessionId
+  }
 }

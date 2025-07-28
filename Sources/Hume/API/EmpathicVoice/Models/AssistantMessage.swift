@@ -8,29 +8,30 @@
 import Foundation
 
 public struct AssistantMessage: Codable {
-    public let customSessionId: String?
-    /** Indicates if this message was constructed from a text input message. */
-    public let fromText: Bool
-    /** ID of the assistant message. */
-    public let id: String?
-    /** Transcript of the message. */
-    public let message: ChatMessage
-    /** Inference model results. */
-    public let models: Inference
-    public let type: String
+  public let customSessionId: String?
+  /** Indicates if this message was constructed from a text input message. */
+  public let fromText: Bool
+  /** ID of the assistant message. */
+  public let id: String?
+  /** Transcript of the message. */
+  public let message: ChatMessage
+  /** Inference model results. */
+  public let models: Inference
+  public let type: String
 
-    public init(customSessionId: String?,
-                fromText: Bool,
-                id: String?,
-                message: ChatMessage,
-                models: Inference,
-                type: String) {
-        self.customSessionId = customSessionId
-        self.fromText = fromText
-        self.id = id
-        self.message = message
-        self.models = models
-        self.type = type
-    }
+  public init(
+    customSessionId: String?,
+    fromText: Bool,
+    id: String?,
+    message: ChatMessage,
+    models: Inference,
+    type: String
+  ) {
+    self.customSessionId = customSessionId
+    self.fromText = fromText
+    self.id = id
+    self.message = message
+    self.models = models
+    self.type = type
+  }
 }
-

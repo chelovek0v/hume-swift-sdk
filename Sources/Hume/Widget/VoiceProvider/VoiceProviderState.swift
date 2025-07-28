@@ -8,8 +8,8 @@
 import Foundation
 
 public enum VoiceProviderState {
-    case connecting
-    case connected
-    case disconnecting
-    case disconnected
+  case connecting
+  case connected
+  case disconnecting
+  case disconnected
 }

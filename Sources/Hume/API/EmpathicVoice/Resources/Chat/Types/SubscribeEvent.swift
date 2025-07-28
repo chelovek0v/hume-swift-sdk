@@ -7,72 +7,70 @@
 
 import Foundation
 
-
 public enum SubscribeEvent: Decodable {
-    case assistantEnd(AssistantEnd)
-    case assistantMessage(AssistantMessage)
-    case assistantProsodyMessage(AssistantProsodyMessage)
-    case audioOutput(AudioOutput)
-    case chatMetadata(ChatMetadata)
-    case webSocketError(WebSocketError)
-    case userInterruption(UserInterruption)
-    case userMessage(UserMessage)
-    case toolCallMessage(ToolCallMessage)
-    case toolResponseMessage(ToolResponseMessage)
-    case toolErrorMessage(ToolErrorMessage)
-    
-    
-    private enum CodingKeys: String, CodingKey {
-        case type
-    }
-    
-    public var type: String {
-        switch self {
-        case .assistantEnd(let msg): msg.type
-        case .assistantMessage(let msg): msg.type
-        case .assistantProsodyMessage(let msg): msg.type
-        case .audioOutput(let msg): msg.type
-        case .chatMetadata(let msg): msg.type
-        case .webSocketError(let msg): msg.type
-        case .userInterruption(let msg): msg.type
-        case .userMessage(let msg): msg.type
-        case .toolCallMessage(let msg): msg.type
-        case .toolResponseMessage(let msg): msg.type
-        case .toolErrorMessage(let msg): msg.type
-        }
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try container.decode(String.self, forKey: .type)
-        Logger.debug("Decoding event of type=\(type)")
+  case assistantEnd(AssistantEnd)
+  case assistantMessage(AssistantMessage)
+  case assistantProsodyMessage(AssistantProsodyMessage)
+  case audioOutput(AudioOutput)
+  case chatMetadata(ChatMetadata)
+  case webSocketError(WebSocketError)
+  case userInterruption(UserInterruption)
+  case userMessage(UserMessage)
+  case toolCallMessage(ToolCallMessage)
+  case toolResponseMessage(ToolResponseMessage)
+  case toolErrorMessage(ToolErrorMessage)
 
-        switch type {
-        case "assistant_end":
-            self = .assistantEnd(try AssistantEnd(from: decoder))
-        case "assistant_message":
-            self = .assistantMessage(try AssistantMessage(from: decoder))
-        case "assistant_prosody":
-            self = .assistantProsodyMessage(try AssistantProsodyMessage(from: decoder))
-        case "audio_output":
-            self = .audioOutput(try AudioOutput(from: decoder))
-        case "chat_metadata":
-            self = .chatMetadata(try ChatMetadata(from: decoder))
-        case "error":
-            self = .webSocketError(try WebSocketError(from: decoder))
-        case "user_interruption":
-            self = .userInterruption(try UserInterruption(from: decoder))
-        case "user_message":
-            self = .userMessage(try UserMessage(from: decoder))
-        case "tool_call":
-            self = .toolCallMessage(try ToolCallMessage(from: decoder))
-        case "tool_response":
-            self = .toolResponseMessage(try ToolResponseMessage(from: decoder))
-        case "tool_error":
-            self = .toolErrorMessage(try ToolErrorMessage(from: decoder))
-        default:
-            throw HumeError.invalidType(type)
-        }
-    
+  private enum CodingKeys: String, CodingKey {
+    case type
+  }
+
+  public var type: String {
+    switch self {
+    case .assistantEnd(let msg): msg.type
+    case .assistantMessage(let msg): msg.type
+    case .assistantProsodyMessage(let msg): msg.type
+    case .audioOutput(let msg): msg.type
+    case .chatMetadata(let msg): msg.type
+    case .webSocketError(let msg): msg.type
+    case .userInterruption(let msg): msg.type
+    case .userMessage(let msg): msg.type
+    case .toolCallMessage(let msg): msg.type
+    case .toolResponseMessage(let msg): msg.type
+    case .toolErrorMessage(let msg): msg.type
     }
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let type = try container.decode(String.self, forKey: .type)
+    Logger.debug("Decoding event of type=\(type)")
+
+    switch type {
+    case "assistant_end":
+      self = .assistantEnd(try AssistantEnd(from: decoder))
+    case "assistant_message":
+      self = .assistantMessage(try AssistantMessage(from: decoder))
+    case "assistant_prosody":
+      self = .assistantProsodyMessage(try AssistantProsodyMessage(from: decoder))
+    case "audio_output":
+      self = .audioOutput(try AudioOutput(from: decoder))
+    case "chat_metadata":
+      self = .chatMetadata(try ChatMetadata(from: decoder))
+    case "error":
+      self = .webSocketError(try WebSocketError(from: decoder))
+    case "user_interruption":
+      self = .userInterruption(try UserInterruption(from: decoder))
+    case "user_message":
+      self = .userMessage(try UserMessage(from: decoder))
+    case "tool_call":
+      self = .toolCallMessage(try ToolCallMessage(from: decoder))
+    case "tool_response":
+      self = .toolResponseMessage(try ToolResponseMessage(from: decoder))
+    case "tool_error":
+      self = .toolErrorMessage(try ToolErrorMessage(from: decoder))
+    default:
+      throw HumeError.invalidType(type)
+    }
+
+  }
 }

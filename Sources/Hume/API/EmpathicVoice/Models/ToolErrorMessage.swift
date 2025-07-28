@@ -8,27 +8,29 @@
 import Foundation
 
 public struct ToolErrorMessage: Codable {
-    let type: String
-    let toolCallId: String
-    let content: String
-    let error: String
-    let customSessionId: String?
-    let code: String?
-    let level: String?
+  let type: String
+  let toolCallId: String
+  let content: String
+  let error: String
+  let customSessionId: String?
+  let code: String?
+  let level: String?
 
-    public init(type: String,
-                toolCallId: String,
-                content: String,
-                error: String,
-                customSessionId: String?,
-                code: String?,
-                level: String?) {
-        self.type = type
-        self.toolCallId = toolCallId
-        self.content = content
-        self.error = error
-        self.customSessionId = customSessionId
-        self.code = code
-        self.level = level
-    }
+  public init(
+    type: String,
+    toolCallId: String,
+    content: String,
+    error: String,
+    customSessionId: String?,
+    code: String?,
+    level: String?
+  ) {
+    self.type = type
+    self.toolCallId = toolCallId
+    self.content = content
+    self.error = error
+    self.customSessionId = customSessionId
+    self.code = code
+    self.level = level
+  }
 }

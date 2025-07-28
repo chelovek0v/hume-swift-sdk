@@ -7,20 +7,21 @@
 
 import Foundation
 
-
 public struct ToolResponseMessage: Codable {
-    let type: String
-    let toolCallId: String
-    let content: String
-    let customSessionId: String?
+  let type: String
+  let toolCallId: String
+  let content: String
+  let customSessionId: String?
 
-    public init(type: String,
-                toolCallId: String,
-                content: String,
-                customSessionId: String?) {
-        self.type = type
-        self.toolCallId = toolCallId
-        self.content = content
-        self.customSessionId = customSessionId
-    }
+  public init(
+    type: String,
+    toolCallId: String,
+    content: String,
+    customSessionId: String?
+  ) {
+    self.type = type
+    self.toolCallId = toolCallId
+    self.content = content
+    self.customSessionId = customSessionId
+  }
 }
