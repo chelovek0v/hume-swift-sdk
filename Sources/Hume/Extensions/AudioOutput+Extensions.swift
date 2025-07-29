@@ -6,4 +6,4 @@ extension AudioOutput {
   public var asBase64EncodedData: Data? {
     Data(base64Encoded: data)
   }
-} 
+}

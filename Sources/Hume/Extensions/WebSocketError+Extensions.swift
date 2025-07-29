@@ -31,10 +31,10 @@ public enum WebSocketErrorType: String {
 
   public var message: String {
     switch self {
-    case .chatGroupNotFound: 
+    case .chatGroupNotFound:
       return "Could not retrieve previous chat history. Please start a new chat"
-    case .chatResumeFailed: 
+    case .chatResumeFailed:
       return "Could not resume previous chat. Please start a new chat"
     }
   }
-} 
+}
