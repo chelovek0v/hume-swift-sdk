@@ -18,7 +18,7 @@ public enum VoiceProviderError: Error {
   /// Received a WebSocket error.
   case websocketError(WebSocketError)
   /// Failed to start the audio hub.
-  case audioHubStartFailure(Errr)
+  case audioHubStartFailure(Error)
   /// Failed to stop the audio hub.
   case audioHubStopFailure(Error)
   /// Failed to configure the audio hub.

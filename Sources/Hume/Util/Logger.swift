@@ -1,12 +1,15 @@
 import Foundation
 
-struct Logger {
-  enum LogLevel: String {
+public struct Logger {
+  public enum LogLevel: String {
     case debug = "🤖 DEBUG"
     case info = "ℹ️ INFO"
     case warn = "⚠️ WARN"
     case error = "❌ ERROR"
   }
+
+  /// Configures the Logger to call this closure instead of printing to the console
+  public static var logCallback: ((String, LogLevel) -> Void)? = nil
 
   private static let dateFormatter: DateFormatter = {
     let formatter = DateFormatter()
@@ -18,13 +21,16 @@ struct Logger {
   static func log(
     _ message: String, level: LogLevel = .info, fileName: String = #file, lineNumber: Int = #line
   ) {
-    #if DEBUG
-      let fileNameWithoutPath = (fileName as NSString).lastPathComponent
-      let currentTime = dateFormatter.string(from: Date())
-      let logMessage =
-        "[Hume SDK][\(currentTime)] [\(level.rawValue)] [\(fileNameWithoutPath):\(lineNumber)]: \(message)"
+    let fileNameWithoutPath = (fileName as NSString).lastPathComponent
+    let currentTime = dateFormatter.string(from: Date())
+    let logMessage =
+      "[Hume SDK][\(currentTime)] [\(level.rawValue)] [\(fileNameWithoutPath):\(lineNumber)]: \(message)"
+
+    if let logCallback {
+      logCallback(logMessage, level)
+    } else {
       print(logMessage)
-    #endif
+    }
   }
 
   static func debug(_ message: String, fileName: String = #file, lineNumber: Int = #line) {
