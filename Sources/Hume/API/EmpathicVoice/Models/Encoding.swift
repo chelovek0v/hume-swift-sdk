@@ -7,7 +7,6 @@
 
 import Foundation
 
-
 public enum Encoding: String, Codable {
-    case linear16
+  case linear16
 }

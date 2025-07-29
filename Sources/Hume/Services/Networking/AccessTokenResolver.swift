@@ -8,10 +8,10 @@
 import Foundation
 
 internal struct AccessTokenResolver {
-    internal static func resolve(options: HumeClient.Options) async throws -> String {
-        switch options {
-        case .accessToken(let accessToken):
-            return accessToken
-        }
+  internal static func resolve(options: HumeClient.Options) async throws -> String {
+    switch options {
+    case .accessToken(let accessToken):
+      return accessToken
     }
+  }
 }

@@ -8,23 +8,23 @@
 import AVFoundation
 
 public enum AudioFormat {
-    case PCM_16BIT
-    
-    var commonFormat: AVAudioCommonFormat {
-        switch self {
-        case .PCM_16BIT: return .pcmFormatInt16
-        }
+  case PCM_16BIT
+
+  var commonFormat: AVAudioCommonFormat {
+    switch self {
+    case .PCM_16BIT: return .pcmFormatInt16
     }
-    
-    var encoding: Encoding {
-        switch self {
-        case .PCM_16BIT: return .linear16
-        }
+  }
+
+  var encoding: Encoding {
+    switch self {
+    case .PCM_16BIT: return .linear16
     }
-    
-    var description: String {
-        switch self {
-        case .PCM_16BIT: return "16-bit PCM"
-        }
+  }
+
+  var description: String {
+    switch self {
+    case .PCM_16BIT: return "16-bit PCM"
     }
+  }
 }

@@ -8,9 +8,9 @@
 import Foundation
 
 public struct ContextUtterance: Codable, Hashable {
-    public let utterances: [PostedUtterance]
-    
-    public init(utterances: [PostedUtterance]) {
-        self.utterances = utterances
-    }
+  public let utterances: [PostedUtterance]
+
+  public init(utterances: [PostedUtterance]) {
+    self.utterances = utterances
+  }
 }

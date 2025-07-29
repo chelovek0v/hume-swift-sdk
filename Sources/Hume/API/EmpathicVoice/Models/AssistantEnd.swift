@@ -7,11 +7,10 @@
 
 import Foundation
 
-
 public struct AssistantEnd: Decodable {
-    let type: String
+  let type: String
 
-    public init() {
-        self.type = "assistant_end"
-    }
+  public init() {
+    self.type = "assistant_end"
+  }
 }

@@ -8,6 +8,6 @@
 import AVFoundation
 
 struct AudioSessionIO {
-    var input: AVAudioSessionPortDescription
-    var output: AVAudioSessionPortDescription
+  var input: AVAudioSessionPortDescription
+  var output: AVAudioSessionPortDescription
 }

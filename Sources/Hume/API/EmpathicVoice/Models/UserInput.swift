@@ -7,22 +7,18 @@
 
 import Foundation
 
-
-/**
- * User text to insert into the conversation.
- */
+/// User text to insert into the conversation.
 public struct UserInput: Codable {
-    
-    let customSessionId: String?
-    /** User text to insert into the conversation. */
-    let text: String
-    let type: String
-    
-    public init(customSessionId: String? = nil, text: String) {
-        self.customSessionId = customSessionId
-        self.text = text
-        self.type = "user_input"
-    }
-    
-    
+
+  let customSessionId: String?
+  /** User text to insert into the conversation. */
+  let text: String
+  let type: String
+
+  public init(customSessionId: String? = nil, text: String) {
+    self.customSessionId = customSessionId
+    self.text = text
+    self.type = "user_input"
+  }
+
 }

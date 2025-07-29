@@ -7,11 +7,10 @@
 
 import Foundation
 
-
 public struct ProsodyInference: Codable {
-    public let scores: EmotionScores
+  public let scores: EmotionScores
 
-    public init(scores: EmotionScores) {
-        self.scores = scores
-    }
+  public init(scores: EmotionScores) {
+    self.scores = scores
+  }
 }

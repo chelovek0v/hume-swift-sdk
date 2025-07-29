@@ -8,6 +8,6 @@
 import Foundation
 
 public struct OpenGraph: Codable {
-    public let title: String?
-    public let image: String?
+  public let title: String?
+  public let image: String?
 }
