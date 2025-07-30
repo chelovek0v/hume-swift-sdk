@@ -97,8 +97,8 @@ public class VoiceProvider: VoiceProvidable {
                   try await self.sendSessionSettings(
                     message: defaultedSessionSettings ?? sessionSettings)
 
-                  Logger.info("Waiting for audio hub to be ready")
-                  try await self.audioHub.state.waitFor(.running)
+                  Logger.info("Waiting to receive chat metadata to finalize AudioHub")
+                  try await self.audioHub.state.waitFor(.running, timeout: 10)
 
                   Logger.info("Finalizing audio hub configuration")
                   self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
