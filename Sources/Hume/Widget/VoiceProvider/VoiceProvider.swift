@@ -211,23 +211,9 @@ extension VoiceProvider {
               Logger.error("Error receiving messages: \(error). Disconnecting...")
               Task { await self.disconnect() }
             case .closed, .disconnected:
-              Logger.warn(
-                "received closed or disconnected error while sending mic data, cleaning up")
-              // if the socket is closed or disconnected while we're attempting to send mic data, it means AudioHub didn't shut down correctly
-              try? await self.audioHub.stop()
-            case .connectionError, .transportError, .encodingError, .decodingError:
-              Logger.error("error sending mic data: \(error.rawValue), disconnecting...")
-              self.delegateQueue.async {
-                self.delegate?.voiceProvider(
-                  self, didProduceError: VoiceProviderError.socketSendError(error))
-              }
-              await self.disconnect()
-            }
-          } catch {
-            Logger.error("error sending mic data: \(error)")
-            self.delegateQueue.async {
-              self.delegate?.voiceProvider(
-                self, didProduceError: VoiceProviderError.socketSendError(error))
+              Logger.debug("Event subscription received \(error.rawValue) code.")
+            case .encodingError, .decodingError:
+              Logger.warn("Event subscription received \(error.rawValue) code")
             }
           } catch {
             Logger.error("Unknown error receiving messages: \(error). Disconnecting...")
@@ -315,7 +301,7 @@ extension VoiceProvider {
       case .closed, .disconnected:
         Logger.warn("received closed or disconnected error while sending mic data, cleaning up")
         // if the socket is closed or disconnected while we're attempting to send mic data, it means AudioHub didn't
-        break
+        try? await self.audioHub.stop()
       case .connectionError, .transportError, .encodingError, .decodingError:
         Logger.error("error sending mic data: \(error.rawValue), disconnecting...")
         delegateQueue.async {
