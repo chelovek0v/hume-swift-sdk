@@ -21,15 +21,16 @@ class AudioSession {
   private var observersRegistered = false
 
   func start() throws {
+    Logger.info("Starting audio session")
     guard activeConfig != nil else {
       throw AudioSessionError.unconfigured
     }
     try audioSession.setActive(true)
     try handleAudioRouting()
-    Logger.debug("Starting audio engine")
   }
 
   func stop() throws {
+    Logger.info("Stopping audio session")
     try audioSession.setActive(false, options: [.notifyOthersOnDeactivation])
   }
 

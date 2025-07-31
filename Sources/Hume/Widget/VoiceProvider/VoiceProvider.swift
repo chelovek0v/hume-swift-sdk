@@ -17,6 +17,8 @@ public class VoiceProvider: VoiceProvidable {
   private var audioHub: AudioHub = AudioHubImpl()
   private var audioHubStateCancellable: AnyCancellable?
 
+  private var connectionContinuation: CheckedContinuation<(), any Error>?
+
   public weak var delegate: (any VoiceProviderDelegate)?
 
   // MARK: - Metering
@@ -98,18 +100,9 @@ public class VoiceProvider: VoiceProvidable {
                     message: defaultedSessionSettings ?? sessionSettings)
 
                   Logger.info("Waiting to receive chat metadata to finalize AudioHub")
-                  try await self.audioHub.state.waitFor(.running, timeout: 10)
-
-                  Logger.info("Finalizing audio hub configuration")
-                  self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
-                  self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
-                  self.stateSubject.send(.connected)
-                  self.delegateQueue.async {
-                    self.delegate?.voiceProviderDidConnect(self)
-                  }
-                  continuation.resume()
-                  Logger.info("Voice Provider connected successfully")
+                  self.connectionContinuation = continuation
                 } catch {
+                  self.stateSubject.send(.disconnected)
                   continuation.resume(throwing: error)
                 }
               }
@@ -126,6 +119,32 @@ public class VoiceProvider: VoiceProvidable {
           )
       }
     }
+  }
+
+  private func completeConnectionSetup(error: Error? = nil) {
+    guard let connectionContinuation else {
+      Logger.error("missing connection continuation")
+      Task { await self.disconnect() }
+      return
+    }
+
+    if let error {
+      Task {
+        await self.disconnect()
+        connectionContinuation.resume(throwing: error)
+      }
+    } else {
+      Logger.info("Finalizing audio hub configuration")
+      self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
+      self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
+      self.stateSubject.send(.connected)
+      self.delegateQueue.async {
+        self.delegate?.voiceProviderDidConnect(self)
+      }
+      connectionContinuation.resume()
+      Logger.info("Voice Provider connected successfully")
+    }
+    self.connectionContinuation = nil
   }
 
   public func disconnect() async {
@@ -260,7 +279,12 @@ extension VoiceProvider {
         Chat Group ID: \(response.chatGroupId)
         """)
       Task {
-        try? await self.audioHub.start()
+        do {
+          try await self.audioHub.start()
+          completeConnectionSetup()
+        } catch {
+          completeConnectionSetup(error: error)
+        }
       }
     case .webSocketError(let error):
       if error.slug == "inactivity_timeout" {

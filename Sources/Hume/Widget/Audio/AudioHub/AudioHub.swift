@@ -116,6 +116,7 @@ public class AudioHubImpl: AudioHub {
     }
     activeConfig = config
     await stateSubject.send(.configuring)
+    Logger.info("AudioHub state: configuring")
 
     do {
       try audioSession.configure(with: config)
@@ -139,20 +140,22 @@ public class AudioHubImpl: AudioHub {
       }
     } catch {
       await stateSubject.send(.unconfigured)
+      Logger.info("AudioHub state: unconfigured")
       throw error
     }
 
     await stateSubject.send(.stopped)
+    Logger.info("AudioHub state: stopped")
   }
 
   public func enqueue(soundClip: SoundClip) async throws {
     guard await stateSubject.value == .running else {
       Logger.warn("skipping enqueue because audio hub is not running")
       throw AudioHubError.notRunning
-      return
     }
 
-    Logger.info("Adding message to SoundPlayer: \(soundClip.id) (\(soundClip.index)")
+    Logger.info(
+      "Adding message to SoundPlayer: \(soundClip.id) (\(String(describing: soundClip.index))")
     if let header = soundClip.header {
       if (soundPlayer != nil
         && UInt32(soundPlayer?.inputFormat.sampleRate ?? 0) != header.sampleRate)
@@ -179,15 +182,26 @@ public class AudioHubImpl: AudioHub {
   }
 
   public func start() async throws {
-    guard [.stopped, .stopping].contains(await stateSubject.value) else {
-      Logger.warn("attempted to start audio hub from a running state")
+    let currentState = await stateSubject.value
+    guard [.stopped, .stopping].contains(currentState) else {
+      Logger.warn("attempted to start audio hub from a \(currentState) state")
       return
     }
     await stateSubject.send(.starting)
+    Logger.info("AudioHub state: starting")
     Logger.info("Starting AudioHub")
-    try audioSession.start()
-    try audioEngine.start()
-    await stateSubject.send(.running)
+    do {
+      try audioSession.start()
+      Logger.info("Starting audio engine")
+      try audioEngine.start()
+      await stateSubject.send(.running)
+      Logger.info("AudioHub state: running")
+    } catch {
+      Logger.error("Failed to start audio engine: \(error)")
+      await stateSubject.send(.stopped)
+      Logger.info("AudioHub state: stopped")
+      throw error
+    }
   }
 
   public func stop() async throws {
@@ -205,6 +219,7 @@ public class AudioHubImpl: AudioHub {
     }
 
     await stateSubject.send(.stopping)
+    Logger.info("AudioHub state: stopping")
 
     microphoneDataChunkHandler = nil
     soundPlayer?.clearQueue()
@@ -216,6 +231,7 @@ public class AudioHubImpl: AudioHub {
     }
 
     await stateSubject.send(.stopped)
+    Logger.info("AudioHub state: stopped")
   }
 
   public func muteMic(_ mute: Bool) {
