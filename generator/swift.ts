@@ -366,27 +366,8 @@ export const renderSwiftDictionaryWithAccessors = (
     .join("\n");
 
   const content =
-    `public class ${dictAccessors.name}: Dictionary<String, Double> {\n` +
-    "  public override init() {\n" +
-    "    super.init()\n" +
-    "  }\n" +
-    "\n" +
-    "  public override init(dictionaryLiteral elements: (String, Double)...) {\n" +
-    "    super.init(dictionaryLiteral: elements)\n" +
-    "  }\n" +
-    "\n" +
-    "  public override init(minimumCapacity: Int) {\n" +
-    "    super.init(minimumCapacity: minimumCapacity)\n" +
-    "  }\n" +
-    "\n" +
-    "  public override init<S>(_ elements: S) where S : Sequence, S.Element == (String, Double) {\n" +
-    "    super.init(elements)\n" +
-    "  }\n" +
-    "\n" +
-    "  public override init(dictionary: [String : Double]) {\n" +
-    "    super.init(dictionary: dictionary)\n" +
-    "  }\n" +
-    "\n" +
+    `public typealias ${dictAccessors.name} = [String: Double]\n\n` +
+    `extension ${dictAccessors.name} {\n` +
     "  // Named accessors for emotion scores\n" +
     properties +
     "\n}";
@@ -561,7 +542,7 @@ export const renderSDKMethod = (method: SDKMethod): string => {
   ) -> AsyncThrowingStream<${streamType}, Error> {
     return networkClient.stream(
       Endpoint.${endpointMethodName}(
-        ${method.parameters.map(p => p.name).join(", ")},
+        ${method.parameters.map(p => `${p.name}: ${p.name}`).join(", ")},
         timeoutDuration: timeoutDuration,
         maxRetries: maxRetries)
     )
@@ -574,7 +555,7 @@ export const renderSDKMethod = (method: SDKMethod): string => {
   ) async throws -> ${renderSwiftType(method.returnType)} {
     return try await networkClient.send(
       Endpoint.${methodName}(
-        ${method.parameters.map(p => p.name).join(", ")},
+        ${method.parameters.map(p => `${p.name}: ${p.name}`).join(", ")},
         timeoutDuration: timeoutDuration,
         maxRetries: maxRetries)
     )

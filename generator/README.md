@@ -1,15 +1,13 @@
-# generator
-
-To install dependencies:
-
+# Running instructions
 ```bash
+# Enter this `generator/` directory from the repo root
+cd generator
+
+# install deps
 bun install
+
+# Symbolically link the api specs into the expected location
+ln -s $HUME/dev/fern-config/fern/apis apis/
+
+bun generator.ts --target-dir ..
 ```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.2.1. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.

@@ -1,3 +1,10 @@
+// This file parses OpenAPI and AsyncAPI and "decorates" them so that case analysis is easier to do
+// inside the generator.
+//
+// Basically we
+// 1. Parse a RawOpenAPISpec. This represents the OpenAPI spec as it actually is with nothing added.
+// 2. Do case analysis and "decorate" the spec with a `kind` field that identifies different cases that exist and that we should handle later in the generator.
+// 3. Parse the decorated spec into a more structured `OpenAPISpec` that has the `kind` field in place and much narrower datatypes.
 import _ from "lodash";
 import { z } from "zod";
 import * as fs from "fs/promises";
