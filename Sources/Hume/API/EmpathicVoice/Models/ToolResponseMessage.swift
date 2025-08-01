@@ -8,7 +8,10 @@ public struct ToolResponseMessage: Codable, Hashable {
   public let type: String
 
   public init(
-    content: String, customSessionId: String?, toolCallId: String, toolName: String?,
+    content: String,
+    customSessionId: String?,
+    toolCallId: String,
+    toolName: String?,
     toolType: ToolType?
   ) {
     self.content = content

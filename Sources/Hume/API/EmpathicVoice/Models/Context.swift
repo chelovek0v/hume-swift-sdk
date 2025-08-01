@@ -3,7 +3,10 @@ public struct Context: Codable, Hashable {
   public let text: String
   public let type: ContextType?
 
-  public init(text: String, type: ContextType?) {
+  public init(
+    text: String,
+    type: ContextType?
+  ) {
     self.text = text
     self.type = type
   }

@@ -11,8 +11,13 @@ public struct SessionSettings: Codable, Hashable {
   public let variables: [String: String]?
 
   public init(
-    audio: AudioConfiguration?, builtinTools: [BuiltinToolConfig]?, context: Context?,
-    customSessionId: String?, languageModelApiKey: String?, systemPrompt: String?, tools: [Tool]?,
+    audio: AudioConfiguration?,
+    builtinTools: [BuiltinToolConfig]?,
+    context: Context?,
+    customSessionId: String?,
+    languageModelApiKey: String?,
+    systemPrompt: String?,
+    tools: [Tool]?,
     variables: [String: String]?
   ) {
     self.audio = audio

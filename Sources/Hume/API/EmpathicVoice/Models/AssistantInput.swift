@@ -4,7 +4,10 @@ public struct AssistantInput: Codable, Hashable {
   public let text: String
   public let type: String
 
-  public init(customSessionId: String?, text: String) {
+  public init(
+    customSessionId: String?,
+    text: String
+  ) {
     self.customSessionId = customSessionId
     self.text = text
     self.type = "assistant_input"

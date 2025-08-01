@@ -4,7 +4,10 @@ public struct AudioInput: Codable, Hashable {
   public let data: String
   public let type: String
 
-  public init(customSessionId: String?, data: String) {
+  public init(
+    customSessionId: String?,
+    data: String
+  ) {
     self.customSessionId = customSessionId
     self.data = data
     self.type = "audio_input"

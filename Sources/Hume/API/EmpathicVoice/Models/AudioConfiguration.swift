@@ -4,7 +4,11 @@ public struct AudioConfiguration: Codable, Hashable {
   public let encoding: Encoding
   public let sampleRate: Int
 
-  public init(channels: Int, encoding: Encoding, sampleRate: Int) {
+  public init(
+    channels: Int,
+    encoding: Encoding,
+    sampleRate: Int
+  ) {
     self.channels = channels
     self.encoding = encoding
     self.sampleRate = sampleRate

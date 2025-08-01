@@ -3,7 +3,10 @@ public struct PostedUtteranceVoiceWithId: Codable, Hashable {
   public let id: String
   public let provider: TTSVoiceProvider?
 
-  public init(id: String, provider: TTSVoiceProvider?) {
+  public init(
+    id: String,
+    provider: TTSVoiceProvider?
+  ) {
     self.id = id
     self.provider = provider
   }

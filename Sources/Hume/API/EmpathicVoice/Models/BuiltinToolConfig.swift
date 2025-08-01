@@ -3,7 +3,10 @@ public struct BuiltinToolConfig: Codable, Hashable {
   public let fallbackContent: String?
   public let name: BuiltInTool
 
-  public init(fallbackContent: String?, name: BuiltInTool) {
+  public init(
+    fallbackContent: String?,
+    name: BuiltInTool
+  ) {
     self.fallbackContent = fallbackContent
     self.name = name
   }

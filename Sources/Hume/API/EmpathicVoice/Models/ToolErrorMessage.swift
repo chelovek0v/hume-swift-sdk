@@ -10,8 +10,13 @@ public struct ToolErrorMessage: Codable, Hashable {
   public let type: String
 
   public init(
-    code: String?, content: String?, customSessionId: String?, error: String, level: ErrorLevel?,
-    toolCallId: String, toolType: ToolType?
+    code: String?,
+    content: String?,
+    customSessionId: String?,
+    error: String,
+    level: ErrorLevel?,
+    toolCallId: String,
+    toolType: ToolType?
   ) {
     self.code = code
     self.content = content

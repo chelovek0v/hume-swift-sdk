@@ -7,7 +7,11 @@ public struct Tool: Codable, Hashable {
   public let type: ToolType
 
   public init(
-    description: String?, fallbackContent: String?, name: String, parameters: String, type: ToolType
+    description: String?,
+    fallbackContent: String?,
+    name: String,
+    parameters: String,
+    type: ToolType
   ) {
     self.description = description
     self.fallbackContent = fallbackContent

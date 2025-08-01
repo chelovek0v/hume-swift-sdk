@@ -4,7 +4,10 @@ public struct UserInput: Codable, Hashable {
   public let text: String
   public let type: String
 
-  public init(customSessionId: String?, text: String) {
+  public init(
+    customSessionId: String?,
+    text: String
+  ) {
     self.customSessionId = customSessionId
     self.text = text
     self.type = "user_input"

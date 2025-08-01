@@ -11,7 +11,9 @@ public class TTS {
   }
 
   public func synthesizeJson(
-    request: PostedTts, timeoutDuration: TimeInterval = 120, maxRetries: Int = 0
+    request: PostedTts,
+    timeoutDuration: TimeInterval = 120,
+    maxRetries: Int = 0
   ) async throws -> ReturnTts {
     return try await networkClient.send(
       Endpoint.synthesizeJson(
@@ -22,7 +24,9 @@ public class TTS {
   }
 
   public func synthesizeFile(
-    request: PostedTts, timeoutDuration: TimeInterval = 120, maxRetries: Int = 0
+    request: PostedTts,
+    timeoutDuration: TimeInterval = 120,
+    maxRetries: Int = 0
   ) async throws -> Data {
     return try await networkClient.send(
       Endpoint.synthesizeFile(
@@ -33,7 +37,9 @@ public class TTS {
   }
 
   public func synthesizeFileStreaming(
-    request: PostedTts, timeoutDuration: TimeInterval = 300, maxRetries: Int = 0
+    request: PostedTts,
+    timeoutDuration: TimeInterval = 300,
+    maxRetries: Int = 0
   ) -> AsyncThrowingStream<Data, Error> {
     return networkClient.stream(
       Endpoint.synthesizeFileStream(
@@ -44,7 +50,9 @@ public class TTS {
   }
 
   public func synthesizeJsonStreaming(
-    request: PostedTts, timeoutDuration: TimeInterval = 300, maxRetries: Int = 0
+    request: PostedTts,
+    timeoutDuration: TimeInterval = 300,
+    maxRetries: Int = 0
   ) -> AsyncThrowingStream<SnippetAudioChunk, Error> {
     return networkClient.stream(
       Endpoint.synthesizeJsonStream(

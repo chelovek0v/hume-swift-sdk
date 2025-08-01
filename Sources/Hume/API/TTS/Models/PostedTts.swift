@@ -9,8 +9,13 @@ public struct PostedTts: Codable, Hashable {
   public let instantMode: Bool?
 
   public init(
-    context: PostedTtsContext?, format: Format?, numGenerations: Int?, splitUtterances: Bool?,
-    stripHeaders: Bool?, utterances: [PostedUtterance], instantMode: Bool?
+    context: PostedTtsContext?,
+    format: Format?,
+    numGenerations: Int?,
+    splitUtterances: Bool?,
+    stripHeaders: Bool?,
+    utterances: [PostedUtterance],
+    instantMode: Bool?
   ) {
     self.context = context
     self.format = format

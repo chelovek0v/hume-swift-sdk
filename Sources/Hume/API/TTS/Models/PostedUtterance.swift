@@ -7,7 +7,10 @@ public struct PostedUtterance: Codable, Hashable {
   public let voice: TtsVoiceRef?
 
   public init(
-    description: String?, speed: Double?, text: String, trailingSilence: Double?,
+    description: String?,
+    speed: Double?,
+    text: String,
+    trailingSilence: Double?,
     voice: TtsVoiceRef?
   ) {
     self.description = description
