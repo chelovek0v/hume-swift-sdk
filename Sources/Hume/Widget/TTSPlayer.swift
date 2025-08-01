@@ -7,7 +7,7 @@
 
 /// Audio player that directly plays a TTS stream from a request
 public protocol TTSPlayer {
-  func playTtsStream(_ request: PostedTtsStream) async throws
+  func playTtsStream(_ request: PostedTts) async throws
 
   /// Prepares the audio player. Call this before attempting to play a strema
   func prepare() async throws
@@ -25,7 +25,7 @@ public class TTSPlayerImpl: TTSPlayer {
     self.tts = tts
   }
 
-  public func playTtsStream(_ request: PostedTtsStream) async throws {
+  public func playTtsStream(_ request: PostedTts) async throws {
     if await audioHub.stateSubject.value != .running {
       try await prepare()
     }
@@ -46,7 +46,7 @@ public class TTSPlayerImpl: TTSPlayer {
 
   // MARK: - Playback
 
-  private func playFileStream(for request: PostedTtsStream) async throws {
+  private func playFileStream(for request: PostedTts) async throws {
     let stream = tts.synthesizeFileStreaming(request: request)
 
     for try await data in stream {
