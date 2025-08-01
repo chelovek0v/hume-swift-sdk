@@ -7,7 +7,7 @@ final class HumeClientTests: XCTestCase {
   var client: HumeClient!
 
   override func setUp() {
-    self.client = HumeClient(options: .apiKey(apiKey: "key", clientSecret: "secret"))
+    self.client = HumeClient(options: .accessToken(token: "token"))
   }
 
   func test_empathicVoice_returnsLazily() throws {

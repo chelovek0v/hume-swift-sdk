@@ -15,7 +15,7 @@ final class UserMessageTest: XCTestCase {
 
   func test_decodesJson() throws {
     let json =
-      "{\"type\":\"user_message\",\"message\":{\"role\":\"user\",\"content\":\"Hello, what are you up to today?\"},\"models\":{},\"time\":{\"begin\":278,\"end\":278},\"from_text\":true}"
+      "{\"type\":\"user_message\",\"message\":{\"role\":\"user\",\"content\":\"Hello, what are you up to today?\"},\"models\":{},\"time\":{\"begin\":278,\"end\":278},\"from_text\":true,\"interim\":false}"
     let message = try! decoder.decode(UserMessage.self, from: json.data(using: .utf8)!)
     XCTAssert(message.fromText)
   }

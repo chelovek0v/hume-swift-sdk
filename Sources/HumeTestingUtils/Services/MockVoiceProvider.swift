@@ -75,19 +75,26 @@ public class MockVoiceProvider: VoiceProvidable {
 
 extension UserMessage {
   fileprivate static var mock: UserMessage {
-    return UserMessage(
-      fromText: false,
-      message: ChatMessage(
-        content: "Mock message",
-        role: .user,
-        toolCall: nil,
-        toolResult: nil
-      ),
-      models: Inference(prosody: nil),
-      customSessionId: nil,
-      time: MillisecondInterval(begin: 0, end: 0),
-      type: "mock",
-      interim: false
-    )
+    let json = """
+      {
+        "custom_session_id": null,
+        "from_text": false,
+        "interim": false,
+        "message": {
+          "content": "Mock message",
+          "role": "user"
+        },
+        "models": {
+          "prosody": null
+        },
+        "time": {
+          "begin": 0,
+          "end": 0
+        },
+        "type": "mock"
+      }
+      """
+    let data = json.data(using: .utf8)!
+    return try! JSONDecoder().decode(UserMessage.self, from: data)
   }
 }
