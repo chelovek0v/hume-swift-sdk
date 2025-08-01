@@ -1,4 +1,4 @@
-import { $, ShellError } from "bun";
+import { $ } from "bun";
 import { camelCase } from "change-case";
 import type { Direction } from "./directions";
 
@@ -211,13 +211,13 @@ export const renderSwiftDiscriminatedUnion = (
         let typeValue = try container.decode(String.self, forKey: .${def.discriminator})
         switch typeValue {
         ${def.discriminatorValues
-      .map(({ caseName, value }) => {
-        const caseType = def.cases.find(
-          (c) => c.caseName === caseName,
-        )?.type;
-        return `case "${value}": self = .${caseName}(try ${renderSwiftType(caseType!)}(from: decoder))`;
-      })
-      .join("\n        ")}
+          .map(({ caseName, value }) => {
+            const caseType = def.cases.find(
+              (c) => c.caseName === caseName,
+            )?.type;
+            return `case "${value}": self = .${caseName}(try ${renderSwiftType(caseType!)}(from: decoder))`;
+          })
+          .join("\n        ")}
         default:
             throw DecodingError.dataCorruptedError(forKey: .${def.discriminator}, in: container, debugDescription: "Unexpected type value: \\(typeValue)")
         }
@@ -228,11 +228,11 @@ export const renderSwiftDiscriminatedUnion = (
         let typeValue = try container.decode(String.self, forKey: .${def.discriminator})
         switch typeValue {
         ${def.cases
-      .map(
-        ({ caseName, type }) =>
-          `case "${caseName}": self = .${caseName}(try ${renderSwiftType(type)}(from: decoder))`,
-      )
-      .join("\n        ")}
+          .map(
+            ({ caseName, type }) =>
+              `case "${caseName}": self = .${caseName}(try ${renderSwiftType(type)}(from: decoder))`,
+          )
+          .join("\n        ")}
         default:
             throw DecodingError.dataCorruptedError(forKey: .${def.discriminator}, in: container, debugDescription: "Unexpected type value: \\(typeValue)")
         }
@@ -243,11 +243,11 @@ export const renderSwiftDiscriminatedUnion = (
     public func encode(to encoder: Encoder) throws {
         switch self {
         ${def.cases
-      .map(
-        ({ caseName }) =>
-          `case .${caseName}(let value): try value.encode(to: encoder)`,
-      )
-      .join("\n        ")}
+          .map(
+            ({ caseName }) =>
+              `case .${caseName}(let value): try value.encode(to: encoder)`,
+          )
+          .join("\n        ")}
         }
     }`;
 
@@ -264,8 +264,12 @@ public enum ${def.name}: Codable, Hashable {
 
 export const renderSwiftStruct = (struct: SwiftStruct) => {
   // Separate commented-out properties from regular properties
-  const commentedOutProperties = struct.properties.filter((p) => p.isCommentedOut);
-  const regularProperties = struct.properties.filter((p) => !p.isCommentedOut && !hasTodo(p.type));
+  const commentedOutProperties = struct.properties.filter(
+    (p) => p.isCommentedOut,
+  );
+  const regularProperties = struct.properties.filter(
+    (p) => !p.isCommentedOut && !hasTodo(p.type),
+  );
 
   // Only include init for types that can be sent (sent or both)
   const shouldIncludeInit = struct.direction !== "received";
@@ -282,7 +286,7 @@ export const renderSwiftStruct = (struct: SwiftStruct) => {
     settableProperties.map((prop) => {
       const typeString = renderSwiftType(prop.type);
       return `${prop.name}: ${typeString}`;
-    })
+    }),
   );
 
   const initAssignments = settableProperties
@@ -309,7 +313,10 @@ ${initAssignments}${constantAssignments ? "\n" + constantAssignments : ""}
 
   // Render commented-out properties
   const commentedOutPropertyLines = commentedOutProperties
-    .map((prop) => `  // TODO: ${prop.name}: ${renderSwiftType(prop.type)} - ${prop.type.type === "TODO" ? prop.type.message : "unsupported type"}`)
+    .map(
+      (prop) =>
+        `  // TODO: ${prop.name}: ${renderSwiftType(prop.type)} - ${prop.type.type === "TODO" ? prop.type.message : "unsupported type"}`,
+    )
     .join("\n");
 
   const allPropertyLines = [regularPropertyLines, commentedOutPropertyLines]
@@ -375,7 +382,9 @@ export const renderSwiftDictionaryWithAccessors = (
   return content;
 };
 
-export const renderSwiftCommentedOutDefinition = (def: SwiftCommentedOutDefinition): string => {
+export const renderSwiftCommentedOutDefinition = (
+  def: SwiftCommentedOutDefinition,
+): string => {
   return `// TODO: ${def.name} - ${def.reason}
 // This type is not yet supported by the Swift SDK generator.
 // 
@@ -391,40 +400,46 @@ export const renderSwiftCommentedOutDefinition = (def: SwiftCommentedOutDefiniti
 `;
 };
 
-export const renderSwiftUndiscriminatedUnion = (def: SwiftUndiscriminatedUnion): string => {
+export const renderSwiftUndiscriminatedUnion = (
+  def: SwiftUndiscriminatedUnion,
+): string => {
   // Generate case names based on the variant types
-  const cases = def.variants.map((variant, index) => {
-    const variantType = renderSwiftType(variant);
-    // Extract a meaningful case name from the type
-    let caseName: string;
-    if (variant.type === "Reference") {
-      caseName = variant.name.charAt(0).toLowerCase() + variant.name.slice(1);
-    } else {
-      caseName = `case${index + 1}`;
-    }
-    return `  case ${caseName}(${variantType})`;
-  }).join("\n");
+  const cases = def.variants
+    .map((variant, index) => {
+      const variantType = renderSwiftType(variant);
+      // Extract a meaningful case name from the type
+      let caseName: string;
+      if (variant.type === "Reference") {
+        caseName = variant.name.charAt(0).toLowerCase() + variant.name.slice(1);
+      } else {
+        caseName = `case${index + 1}`;
+      }
+      return `  case ${caseName}(${variantType})`;
+    })
+    .join("\n");
 
   // Generate decoder logic
-  const decoderCases = def.variants.map((variant, index) => {
-    const variantType = renderSwiftType(variant);
-    let caseName: string;
-    if (variant.type === "Reference") {
-      caseName = variant.name.charAt(0).toLowerCase() + variant.name.slice(1);
-    } else {
-      caseName = `case${index + 1}`;
-    }
-    
-    if (variant.type === "Reference") {
-      return `    if let ${caseName} = try? container.decode(${variantType}.self) {
+  const decoderCases = def.variants
+    .map((variant, index) => {
+      const variantType = renderSwiftType(variant);
+      let caseName: string;
+      if (variant.type === "Reference") {
+        caseName = variant.name.charAt(0).toLowerCase() + variant.name.slice(1);
+      } else {
+        caseName = `case${index + 1}`;
+      }
+
+      if (variant.type === "Reference") {
+        return `    if let ${caseName} = try? container.decode(${variantType}.self) {
       self = .${caseName}(${caseName})
     }`;
-    } else {
-      return `    if let ${caseName} = try? container.decode(${variantType}) {
+      } else {
+        return `    if let ${caseName} = try? container.decode(${variantType}) {
       self = .${caseName}(${caseName})
     }`;
-    }
-  }).join(" else ");
+      }
+    })
+    .join(" else ");
 
   return `import Foundation
 
@@ -517,13 +532,12 @@ const formatParameters = (params: string[]): string => {
 
 export const renderSDKMethod = (method: SDKMethod): string => {
   const methodName = method.name;
-  
-  // Add default parameters for timeout and retries
-  const isStreaming = methodName.includes("Streaming") || methodName.includes("Stream");
-  const timeoutDefault = isStreaming ? "300" : "120";
-  
 
-  
+  // Add default parameters for timeout and retries
+  const isStreaming =
+    methodName.includes("Streaming") || methodName.includes("Stream");
+  const timeoutDefault = isStreaming ? "300" : "120";
+
   const defaultParams = [
     ...method.parameters.map(({ name, type, defaultValue }) => {
       if (!defaultValue) {
@@ -532,17 +546,19 @@ export const renderSDKMethod = (method: SDKMethod): string => {
       return `${name}: ${renderSwiftType(type)} = ${defaultValue}`;
     }),
     `timeoutDuration: TimeInterval = ${timeoutDefault}`,
-    "maxRetries: Int = 0"
+    "maxRetries: Int = 0",
   ];
-  
+
   const renderedParams = formatParameters(defaultParams);
-  
+
   // Determine if this is a streaming method
   const isDataReturn = method.returnType.type === "Data";
-  
+
   if (isStreaming) {
     // For streaming methods, return AsyncThrowingStream
-    const streamType = isDataReturn ? "Data" : renderSwiftType(method.returnType);
+    const streamType = isDataReturn
+      ? "Data"
+      : renderSwiftType(method.returnType);
     const endpointMethodName = methodName.replace("Streaming", "Stream");
     return `
   public func ${methodName}(
@@ -550,7 +566,7 @@ export const renderSDKMethod = (method: SDKMethod): string => {
   ) -> AsyncThrowingStream<${streamType}, Error> {
     return networkClient.stream(
       Endpoint.${endpointMethodName}(
-        ${method.parameters.map(p => `${p.name}: ${p.name}`).join(", ")},
+        ${method.parameters.map((p) => `${p.name}: ${p.name}`).join(", ")},
         timeoutDuration: timeoutDuration,
         maxRetries: maxRetries)
     )
@@ -563,7 +579,7 @@ export const renderSDKMethod = (method: SDKMethod): string => {
   ) async throws -> ${renderSwiftType(method.returnType)} {
     return try await networkClient.send(
       Endpoint.${methodName}(
-        ${method.parameters.map(p => `${p.name}: ${p.name}`).join(", ")},
+        ${method.parameters.map((p) => `${p.name}: ${p.name}`).join(", ")},
         timeoutDuration: timeoutDuration,
         maxRetries: maxRetries)
     )
@@ -578,10 +594,10 @@ export const renderNamespaceClient = (
 ): File => {
   // Capitalize the namespace name for the class name
   const className = namespaceName.toUpperCase() + "Client";
-  
+
   // Use uppercase directory names for TTS
   const directoryName = namespaceName === "tts" ? "TTS" : namespaceName;
-  
+
   return {
     path: `${basePath}/Sources/Hume/API/${directoryName}/Client/${namespaceName}Client.swift`,
     content: `
@@ -607,25 +623,31 @@ export const renderResourceClient = (
   basePath: string,
 ): File => {
   // Generate endpoint extensions
-  const endpointExtensions = methods.map(method => {
-    const methodName = method.name;
-    const isStreaming = methodName.includes("Streaming") || methodName.includes("Stream");
-    const isDataReturn = method.returnType.type === "Data";
-    const responseType = isDataReturn ? "Data" : renderSwiftType(method.returnType);
-    
-    // For streaming methods, use the shorter name without "Streaming" suffix
-    const endpointMethodName = isStreaming ? methodName.replace("Streaming", "Stream") : methodName;
-    
+  const endpointExtensions = methods
+    .map((method) => {
+      const methodName = method.name;
+      const isStreaming =
+        methodName.includes("Streaming") || methodName.includes("Stream");
+      const isDataReturn = method.returnType.type === "Data";
+      const responseType = isDataReturn
+        ? "Data"
+        : renderSwiftType(method.returnType);
 
-    
-    if (isStreaming) {
-      const endpointParams = [
-        ...method.parameters.map(p => `${p.name}: ${renderSwiftType(p.type)}`),
-        "timeoutDuration: TimeInterval",
-        "maxRetries: Int"
-      ];
-      
-      return `
+      // For streaming methods, use the shorter name without "Streaming" suffix
+      const endpointMethodName = isStreaming
+        ? methodName.replace("Streaming", "Stream")
+        : methodName;
+
+      if (isStreaming) {
+        const endpointParams = [
+          ...method.parameters.map(
+            (p) => `${p.name}: ${renderSwiftType(p.type)}`,
+          ),
+          "timeoutDuration: TimeInterval",
+          "maxRetries: Int",
+        ];
+
+        return `
 extension Endpoint where Response == ${responseType} {
   fileprivate static func ${endpointMethodName}(
     ${formatParameters(endpointParams)}
@@ -634,21 +656,23 @@ extension Endpoint where Response == ${responseType} {
       path: "${method.path}",
       method: .${method.verb},
       headers: ["Content-Type": "application/json"],
-      body: ${method.parameters.find(p => p.in === "body")?.name || "nil"},
+      body: ${method.parameters.find((p) => p.in === "body")?.name || "nil"},
       cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
       timeoutDuration: timeoutDuration,
       maxRetries: maxRetries
     )
   }
 }`;
-    } else {
-      const endpointParams = [
-        ...method.parameters.map(p => `${p.name}: ${renderSwiftType(p.type)}`),
-        "timeoutDuration: TimeInterval",
-        "maxRetries: Int"
-      ];
-      
-      return `
+      } else {
+        const endpointParams = [
+          ...method.parameters.map(
+            (p) => `${p.name}: ${renderSwiftType(p.type)}`,
+          ),
+          "timeoutDuration: TimeInterval",
+          "maxRetries: Int",
+        ];
+
+        return `
 extension Endpoint where Response == ${responseType} {
   fileprivate static func ${endpointMethodName}(
     ${formatParameters(endpointParams)}
@@ -657,14 +681,15 @@ extension Endpoint where Response == ${responseType} {
       path: "${method.path}",
       method: .${method.verb},
       headers: ["Content-Type": "application/json"],
-      body: ${method.parameters.find(p => p.in === "body")?.name || "nil"},
+      body: ${method.parameters.find((p) => p.in === "body")?.name || "nil"},
       cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
       timeoutDuration: timeoutDuration,
       maxRetries: maxRetries)
   }
 }`;
-    }
-  }).join("\n");
+      }
+    })
+    .join("\n");
 
   // Use uppercase directory names for TTS
   const directoryName = namespaceName === "tts" ? "TTS" : namespaceName;
@@ -698,10 +723,9 @@ export const swiftFormat = async (input: string): Promise<string> => {
       .split("\n")
       .map((line, i) => `${i + 1}: ${line}`)
       .join("\n");
-    const errorOutput = (e as ShellError).stderr.toString();
+    const errorOutput = (e as any).stderr.toString();
     throw new Error(
       `Error formatting swift code:\n${inputNumbered}\n${errorOutput}`,
     );
   }
 };
-

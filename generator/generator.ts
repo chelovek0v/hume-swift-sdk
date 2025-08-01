@@ -4,7 +4,11 @@ import * as OA from "./parse_openapi";
 import type { JsonSchema } from "./parse_openapi";
 import { camelCase } from "change-case";
 import { calculateSchemaDirections, type Direction } from "./directions";
-import { calculateSchemaNamespaces, getNamespace, type Namespace } from "./namespaces";
+import {
+  calculateSchemaNamespaces,
+  getNamespace,
+  type Namespace,
+} from "./namespaces";
 import {
   normalizedEnumNameFromValue,
   getMethodName,
@@ -28,7 +32,7 @@ import {
   renderNamespaceClient,
   renderResourceClient,
   renderSwiftDefinition,
-  swiftFormat
+  swiftFormat,
 } from "./swift";
 import path from "path";
 import fs from "fs/promises";
@@ -49,13 +53,15 @@ const outNulls = <T>(obj: T): obj is NonNullable<T> => {
 
 type Verb = "get" | "post" | "put" | "patch" | "delete";
 
-const exhaustive = (x: never): any => x;
+const exhaustive = (x: never): any => {
+  throw new Error(`Unexpected object: ${x}`);
+};
 
 const pascalCase = (str: string): string => {
   return str
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join('');
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join("");
 };
 
 /**
@@ -74,7 +80,8 @@ const applyEmotionScoresSpecialCase = (
   const name = "EmotionScores";
 
   // Extract emotion properties from the actual schema definition
-  const emotionProperties: Array<{ propertyName: string; keyName: string }> = [];
+  const emotionProperties: Array<{ propertyName: string; keyName: string }> =
+    [];
 
   if (schema.kind === "object" && schema.properties) {
     // Convert property names from the API spec to camelCase Swift property names
@@ -149,22 +156,24 @@ type Back<T, TStep> = {
 
 type Step =
   | {
-    kind: "property";
-    name: string;
-    parentSchemaName?: string;
-  }
+      kind: "property";
+      name: string;
+      parentSchemaName?: string;
+    }
   | {
-    kind: "nullable";
-  }
+      kind: "nullable";
+    }
   | {
-    kind: "variant";
-    i: number;
-  }
+      kind: "variant";
+      i: number;
+    }
   | {
-    kind: "array";
-  };
+      kind: "array";
+    };
 
-const surroundingPropertyName = (back: Back<JsonSchema, Step> | null): string | undefined => {
+const surroundingPropertyName = (
+  back: Back<JsonSchema, Step> | null,
+): string | undefined => {
   if (!back) return undefined;
   if (back.step.kind === "property") {
     return back.step.name;
@@ -172,7 +181,9 @@ const surroundingPropertyName = (back: Back<JsonSchema, Step> | null): string | 
   return surroundingPropertyName(back.back);
 };
 
-const surroundingSchemaName = (back: Back<JsonSchema, Step> | null): string | undefined => {
+const surroundingSchemaName = (
+  back: Back<JsonSchema, Step> | null,
+): string | undefined => {
   if (!back) return undefined;
 
   // If we're at a property step with a parent schema name, use it
@@ -184,8 +195,15 @@ const surroundingSchemaName = (back: Back<JsonSchema, Step> | null): string | un
   let currentBack: Back<JsonSchema, Step> | null = back;
   while (currentBack) {
     const schema = currentBack.to;
-    if (schema.kind === "object" || schema.kind === "discriminatedUnion" || schema.kind === "enum") {
-      const schemaName = (schema as any)["x-fern-type-name"] || (schema as any).schemaKey || (schema as any).title;
+    if (
+      schema.kind === "object" ||
+      schema.kind === "discriminatedUnion" ||
+      schema.kind === "enum"
+    ) {
+      const schemaName =
+        (schema as any)["x-fern-type-name"] ||
+        (schema as any).schemaKey ||
+        (schema as any).title;
       if (schemaName) {
         return schemaName;
       }
@@ -195,8 +213,6 @@ const surroundingSchemaName = (back: Back<JsonSchema, Step> | null): string | un
 
   return undefined;
 };
-
-
 
 const parseDiscriminatedUnionFromAnyOfRefs = (
   schema: JsonSchema & { kind: "anyOfRefs" },
@@ -284,9 +300,7 @@ const parseDiscriminatedUnionFromAnyOfRefs = (
     type: "discriminatedUnion",
     name: swiftName(
       schema,
-      schema.schemaKey ??
-      typeName ??
-      "TODO_DISCRIMINATED_UNION",
+      schema.schemaKey ?? typeName ?? "TODO_DISCRIMINATED_UNION",
     ),
     discriminator: names[0],
     cases: cases.map((c) => ({ caseName: c.caseName, type: c.type })),
@@ -344,7 +358,6 @@ const schemaToSwiftType = (
   });
   const todo = (message: string) => result({ type: "TODO", message });
 
-
   // Apply special case handling for EmotionScores
   const emotionScoresResult = applyEmotionScoresSpecialCase(schema, direction);
   if (emotionScoresResult) {
@@ -392,7 +405,11 @@ const schemaToSwiftType = (
       if (unionName) {
         // Try to create an undiscriminated union
         const variants = schema.anyOf.map((ref, i) => {
-          const resolvedSchema = resolveIfRef(ref, lookupSchema, currentNamespace);
+          const resolvedSchema = resolveIfRef(
+            ref,
+            lookupSchema,
+            currentNamespace,
+          );
           return recurse(resolvedSchema, { kind: "variant", i });
         });
 
@@ -423,7 +440,7 @@ const schemaToSwiftType = (
           const unionDef: SwiftUndiscriminatedUnion = {
             type: "undiscriminatedUnion",
             name: unionName,
-            variants: cases.map(c => c.type),
+            variants: cases.map((c) => c.type),
             direction: direction,
           };
 
@@ -438,16 +455,20 @@ const schemaToSwiftType = (
     }
 
     case "ref":
-      const lookedUp = lookupSchemaRef(schema.$ref, lookupSchema, currentNamespace);
+      const lookedUp = lookupSchemaRef(
+        schema.$ref,
+        lookupSchema,
+        currentNamespace,
+      );
       return {
         expr: { type: "Reference", name: swiftName(lookedUp) },
         defs: {},
       };
     case "nullableRef": {
-      const { expr, defs } = recurse(
-        schema.anyOf[0],
-        { kind: "variant", i: 0 },
-      );
+      const { expr, defs } = recurse(schema.anyOf[0], {
+        kind: "variant",
+        i: 0,
+      });
       return result({ type: "Optional", wrapped: expr }, defs);
     }
   }
@@ -534,8 +555,6 @@ const schemaToSwiftType = (
         });
         Object.assign(defs, theseDefs);
         cases.push({ caseName, type: expr, discriminatorValue });
-
-
       });
 
       // Create discriminator values array for the union
@@ -555,8 +574,6 @@ const schemaToSwiftType = (
         direction: direction,
       };
 
-
-
       return result(
         { type: "Reference", name: unionName },
         { [unionName]: unionDef },
@@ -565,7 +582,9 @@ const schemaToSwiftType = (
     case "anyOfDiscriminatedUnion":
       return todo("anyOfDiscriminatedUnion not supported yet");
     case "anyOfUndiscriminatedUnion":
-      console.log("DEBUG: anyOfUndiscriminatedUnion case reached in generator.ts line 463");
+      console.log(
+        "DEBUG: anyOfUndiscriminatedUnion case reached in generator.ts line 463",
+      );
       return todo("anyOfUndiscriminatedUnion not supported yet");
     case "oneOfUndiscriminatedUnion":
       return todo("oneOfUndiscriminatedUnion not supported yet");
@@ -610,7 +629,9 @@ const schemaToSwiftType = (
         case "boolean":
           return result({ type: "Bool" });
         case "null":
-          throw new Error('Unsupported: null primitive cannot be rendered right now')
+          throw new Error(
+            "Unsupported: null primitive cannot be rendered right now",
+          );
       }
     }
     case "const": {
@@ -637,8 +658,8 @@ const schemaToSwiftType = (
             constValue?: string;
             isCommentedOut?: boolean;
           } | null => {
-            if (propName == 'prosody') {
-              console.log(prop)
+            if (propName == "prosody") {
+              console.log(prop);
             }
             if (prop.kind === "ignored") {
               return null;
@@ -671,7 +692,12 @@ const schemaToSwiftType = (
             }
 
             const isCommentedOut = type.type === "TODO";
-            return { name: camelCase(propName), type, constValue, isCommentedOut };
+            return {
+              name: camelCase(propName),
+              type,
+              constValue,
+              isCommentedOut,
+            };
           },
         )
         .filter(outNulls);
@@ -692,8 +718,13 @@ const schemaToSwiftType = (
       return result({ type: "Array", element }, defs);
     }
     case "dictionary": {
-      const { expr: valueType, defs } = recurse(schema.additionalProperties, { kind: "array" });
-      return result({ type: "Dictionary", key: { type: "String" }, value: valueType }, defs);
+      const { expr: valueType, defs } = recurse(schema.additionalProperties, {
+        kind: "array",
+      });
+      return result(
+        { type: "Dictionary", key: { type: "String" }, value: valueType },
+        defs,
+      );
     }
   }
   return exhaustive(schema);
@@ -763,17 +794,25 @@ const openapiOperationToSDKMethod = (
       // just filter them out via this bespoke filter for now
       .filter((p) => p.name !== "post_usage" && p.name !== "access_token")
       .map((p): SDKMethodParam => {
-        const { expr } = schemaToSwiftType(p.schema, lookupSchema, null, "sent", namespace);
+        const { expr } = schemaToSwiftType(
+          p.schema,
+          lookupSchema,
+          null,
+          "sent",
+          namespace,
+        );
         let type = expr;
         if (!p.required) type = { type: "Optional", wrapped: type };
-        console.log(p.name)
+        console.log(p.name);
         return { name: p.name, type, in: "query" };
       }),
   );
 
   if (op.kind === "jsonBody") {
     const bodySchema = op.requestBody.content["application/json"].schema;
-    const bodyStructName = swiftName(resolveIfRef(bodySchema, lookupSchema, namespace));
+    const bodyStructName = swiftName(
+      resolveIfRef(bodySchema, lookupSchema, namespace),
+    );
     sdkParameters.push({
       name: "request",
       type: { type: "Reference", name: bodyStructName },
@@ -809,7 +848,13 @@ const openapiOperationToSDKMethod = (
     returnType = { type: "Data" };
   } else {
     const { expr } = successResponseSchema
-      ? schemaToSwiftType(successResponseSchema, lookupSchema, null, "received", namespace)
+      ? schemaToSwiftType(
+          successResponseSchema,
+          lookupSchema,
+          null,
+          "received",
+          namespace,
+        )
       : { expr: { type: "void" as const } };
     returnType = expr;
   }
@@ -838,8 +883,8 @@ export type SwiftSDK = {
 
 /**
  * This defines the overall flow of how OpenAPI and AsyncAPI are converted into a Swift SDK "in the large".
- * 
- * This is mostly data munging, and the actual granular logic for how individual schemas and endpoints 
+ *
+ * This is mostly data munging, and the actual granular logic for how individual schemas and endpoints
  * become Swift types and Swift methods are contained in `schemaToSwiftType` and the more granular detail `openapiOperationToSDKMethod`.
  */
 const buildSwiftSdk = (specs: OA.KnownSpecs): SwiftSDK => {
@@ -852,7 +897,8 @@ const buildSwiftSdk = (specs: OA.KnownSpecs): SwiftSDK => {
     extensions: [],
   });
   const ensureNamespace = (namespace: Namespace) => {
-    const namespaceStr = namespace === "empathicVoice" ? "empathicVoice" : "tts";
+    const namespaceStr =
+      namespace === "empathicVoice" ? "empathicVoice" : "tts";
     if (!sdk.namespaces[namespaceStr]) {
       sdk.namespaces[namespaceStr] = emptyNamespace();
     }
@@ -867,7 +913,8 @@ const buildSwiftSdk = (specs: OA.KnownSpecs): SwiftSDK => {
     methods: SDKMethod[],
   ) => {
     ensureNamespace(namespace);
-    const namespaceStr = namespace === "empathicVoice" ? "empathicVoice" : "tts";
+    const namespaceStr =
+      namespace === "empathicVoice" ? "empathicVoice" : "tts";
     sdk.namespaces[namespaceStr].resourceClients.push({
       name: resourceName,
       methods,
@@ -878,7 +925,8 @@ const buildSwiftSdk = (specs: OA.KnownSpecs): SwiftSDK => {
   // used in requests, responses, and Websocket messages.
   const addDefinition = (namespace: Namespace, def: SwiftDefinition) => {
     ensureNamespace(namespace);
-    const namespaceStr = namespace === "empathicVoice" ? "empathicVoice" : "tts";
+    const namespaceStr =
+      namespace === "empathicVoice" ? "empathicVoice" : "tts";
     // Prevent adding a struct if a typeAlias with the same name already exists
     if (def.type === "struct") {
       const hasTypeAlias = sdk.namespaces[namespaceStr].definitions.some(
@@ -945,7 +993,10 @@ const buildSwiftSdk = (specs: OA.KnownSpecs): SwiftSDK => {
   }
 
   // Create a lookup function that handles special cases and renames
-  const lookupSchema = (name: string, namespace: Namespace): JsonSchema | null => {
+  const lookupSchema = (
+    name: string,
+    namespace: Namespace,
+  ): JsonSchema | null => {
     const namespacedKey = `${namespace === "empathicVoice" ? "evi" : "tts"}:${name}`;
     if (allSchemas[namespacedKey]) {
       return allSchemas[namespacedKey];
@@ -1035,13 +1086,17 @@ const buildSwiftSdk = (specs: OA.KnownSpecs): SwiftSDK => {
 
     // Skip processing if no namespace was determined
     if (!namespace) {
-      console.warn(`Warning: No namespace determined for schema ${schemaKey}, skipping`);
+      console.warn(
+        `Warning: No namespace determined for schema ${schemaKey}, skipping`,
+      );
       return;
     }
 
     // Skip processing if no direction was determined (this should not happen with proper reference graph)
     if (!direction) {
-      console.warn(`Warning: No direction determined for schema ${schemaKey}, skipping`);
+      console.warn(
+        `Warning: No direction determined for schema ${schemaKey}, skipping`,
+      );
       return;
     }
 
@@ -1146,34 +1201,36 @@ const writeSwiftSdk = async (sdk: SwiftSDK, basePath: string) => {
   const files: File[] = [];
 
   // Write namespace clients
-  Object.entries(sdk.namespaces).forEach(([namespaceName, namespace]: [string, any]) => {
-    if (namespace.resourceClients.length > 0) {
-      files.push(
-        renderNamespaceClient(
-          namespaceName,
-          namespace.resourceClients.map((rc: any) => rc.name),
-          basePath,
-        ),
-      );
-    }
+  Object.entries(sdk.namespaces).forEach(
+    ([namespaceName, namespace]: [string, any]) => {
+      if (namespace.resourceClients.length > 0) {
+        files.push(
+          renderNamespaceClient(
+            namespaceName,
+            namespace.resourceClients.map((rc: any) => rc.name),
+            basePath,
+          ),
+        );
+      }
 
-    // Write resource clients
-    namespace.resourceClients.forEach((resourceClient: any) => {
-      files.push(
-        renderResourceClient(
-          namespaceName,
-          resourceClient.name,
-          resourceClient.methods,
-          basePath,
-        ),
-      );
-    });
+      // Write resource clients
+      namespace.resourceClients.forEach((resourceClient: any) => {
+        files.push(
+          renderResourceClient(
+            namespaceName,
+            resourceClient.name,
+            resourceClient.methods,
+            basePath,
+          ),
+        );
+      });
 
-    // Write definitions
-    namespace.definitions.forEach((def: SwiftDefinition) => {
-      files.push(renderSwiftDefinition(namespaceName, def, basePath));
-    });
-  });
+      // Write definitions
+      namespace.definitions.forEach((def: SwiftDefinition) => {
+        files.push(renderSwiftDefinition(namespaceName, def, basePath));
+      });
+    },
+  );
 
   // Track file statistics
   let newCount = 0;
@@ -1192,7 +1249,7 @@ const writeSwiftSdk = async (sdk: SwiftSDK, basePath: string) => {
         newCount++;
       }
       await writeFile(file);
-    })
+    }),
   );
 
   // Format all Swift files
@@ -1217,7 +1274,7 @@ const writeSwiftSdk = async (sdk: SwiftSDK, basePath: string) => {
     replacedFiles: replacedCount,
     deletedFiles: deletedCount,
   };
-}; 
+};
 
 const main = async () => {
   // Parse command line arguments

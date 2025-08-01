@@ -7,6 +7,9 @@ import type { Namespace } from "./namespaces";
 
 type UnIgnored<T> = T extends { kind: "ignored" } ? never : T;
 
+const exhaustive = (x: never): any => {
+  throw new Error(`Unexpected object: ${x}`);
+}
 export const normalizeResourceName = (resourceName: string) => {
   return pascalCase(resourceName.replace(/-/g, " "));
 };
@@ -206,37 +209,80 @@ export const resolveNamingCollisions = (sdk: SwiftSDK): SwiftSDK => {
       let newDef: SwiftDefinition;
       const newName = applyRename(definition.name, namespaceEnum);
 
-      if (definition.type === "enum") {
-        newDef = {
-          ...definition,
-          name: newName,
-        };
-      } else if (definition.type === "struct") {
-        // Update property types to use renamed references
-        const newProperties = definition.properties.map((prop) => ({
-          ...prop,
-          type: updateTypeReferences(prop.type, namespaceEnum),
-        }));
+      switch (definition.type) {
+        case "enum": {
+          newDef = {
+            ...definition,
+            name: newName,
+          };
+          break
+        } case "struct": {
+          // Update property types to use renamed references
+          const newProperties = definition.properties.map((prop) => ({
+            ...prop,
+            type: updateTypeReferences(prop.type, namespaceEnum),
+          }));
 
-        newDef = {
-          ...definition,
-          name: newName,
-          properties: newProperties,
-        };
-      } else if (definition.type === "discriminatedUnion") {
-        // Update case types to use renamed references
-        const newCases = definition.cases.map((c) => ({
-          ...c,
-          type: updateTypeReferences(c.type, namespaceEnum),
-        }));
+          newDef = {
+            ...definition,
+            name: newName,
+            properties: newProperties,
+          };
+          break;
+        } case "discriminatedUnion": {
+          // Update case types to use renamed references
+          const newCases = definition.cases.map((c) => ({
+            ...c,
+            type: updateTypeReferences(c.type, namespaceEnum),
+          }));
 
-        newDef = {
-          ...definition,
-          name: newName,
-          cases: newCases,
-        };
-      } else {
-        newDef = definition; // Shouldn't happen due to exhaustive typing
+          newDef = {
+            ...definition,
+            name: newName,
+            cases: newCases,
+          };
+          break;
+        }
+        case "undiscriminatedUnion": {
+          const newVariants = definition.variants.map((v) => (updateTypeReferences(v, namespaceEnum)));
+          newDef = {
+            ...definition,
+            name: newName,
+            variants: newVariants,
+          };
+          break;
+        } 
+        case "class": {
+          newDef = {
+            ...definition,
+            properties: definition.properties.map((prop) => ({
+              ...prop,
+              type: updateTypeReferences(prop.type, namespaceEnum),
+            })),
+          }
+          break
+        }
+        case "typeAlias":
+          newDef = {
+            ...definition,
+            underlyingType: updateTypeReferences(definition.underlyingType, namespaceEnum),
+          };
+          break;
+        case "commentedOut":
+          newDef = definition
+          break;
+        case "dictionaryWithAccessors":
+          newDef = {
+            ...definition,
+            properties: definition.properties.map((prop) => ({
+              ...prop,
+              type: updateTypeReferences(prop.type, namespaceEnum),
+            })),
+          };
+          break;
+        default: {
+          return exhaustive(definition)
+        }
       }
 
       newSdk.namespaces[namespaceName].definitions.push(newDef);
@@ -246,16 +292,16 @@ export const resolveNamingCollisions = (sdk: SwiftSDK): SwiftSDK => {
     for (const resourceClient of namespace.resourceClients) {
       const updatedMethods = resourceClient.methods.map((method) => {
         // Update parameter types
-                  const newParams = method.parameters.map((param) => ({
-            ...param,
-            type: updateTypeReferences(param.type, namespaceEnum),
-          }));
+        const newParams = method.parameters.map((param) => ({
+          ...param,
+          type: updateTypeReferences(param.type, namespaceEnum),
+        }));
 
-          // Update return type
-          const newReturnType = updateTypeReferences(
-            method.returnType,
-            namespaceEnum,
-          );
+        // Update return type
+        const newReturnType = updateTypeReferences(
+          method.returnType,
+          namespaceEnum,
+        );
 
         return {
           ...method,

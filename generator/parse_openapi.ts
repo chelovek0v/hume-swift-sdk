@@ -546,9 +546,9 @@ const decorateJsonSchema_ = (
       if (schema.anyOf.length === 1) {
         if (schema.anyOf[0].$ref) {
           addSchemaKind(schema, "nullableRef");
-          console.log('got nullable ref')
+          console.log("got nullable ref");
           recurse(schema.anyOf[0]);
-          return
+          return;
         }
         recurse(schema.anyOf[0]);
         const nullable = schema.nullable; // Preserve the nullable property
@@ -610,7 +610,9 @@ const decorateJsonSchema_ = (
         return;
       }
     }
-    const anyOfWithoutNulls = anyOf.filter((x: JsonSchema) => x.kind !== "primitive" ||  x.type !== "null");
+    const anyOfWithoutNulls = anyOf.filter(
+      (x: JsonSchema) => x.kind !== "primitive" || x.type !== "null",
+    );
     if (anyOfWithoutNulls.every((x: JsonSchema) => x.kind === "object")) {
       const discriminant = lookForDiscriminant(anyOfWithoutNulls);
       if (discriminant) {
@@ -1050,7 +1052,7 @@ const applyOverrides = <T extends RawOpenAPISpec | RawAsyncAPISpec>(
   // This was preventing new schemas defined in override files from being added
 
   const merged = _.merge(spec, overrides) as T;
-  
+
   if (
     "x-fern-base-path" in merged &&
     "paths" in merged &&

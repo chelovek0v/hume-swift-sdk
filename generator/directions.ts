@@ -63,12 +63,16 @@ const buildReferenceGraph = (
     const refs = new Set<string>();
 
     // Determine the namespace from the key
-    const namespace = key.startsWith("tts:") ? "tts" : key.startsWith("evi:") ? "evi" : null;
+    const namespace = key.startsWith("tts:")
+      ? "tts"
+      : key.startsWith("evi:")
+        ? "evi"
+        : null;
 
     walkSchema(schema, (s) => {
       if (s.kind === "ref") {
         const refKey = s.$ref.replace(/^#\/components\/schemas\//, "");
-        
+
         // Only resolve refs within the same namespace
         if (namespace) {
           const namespacedKey = `${namespace}:${refKey}`;
@@ -82,7 +86,7 @@ const buildReferenceGraph = (
           // For schemas without namespace prefix, try both (backward compatibility)
           const ttsKey = `tts:${refKey}`;
           const eviKey = `evi:${refKey}`;
-          
+
           if (allSchemas[ttsKey]) {
             refs.add(ttsKey);
           } else if (allSchemas[eviKey]) {
@@ -93,8 +97,6 @@ const buildReferenceGraph = (
         }
       }
     });
-
-
 
     graph.set(key, refs);
   }
@@ -147,8 +149,6 @@ export const calculateSchemaDirections = (
   // Build the reference graph
   const referenceGraph = buildReferenceGraph(allSchemas);
 
-
-
   // Collect initial directions from root schemas
   const initialDirections = new Map<string, Direction>();
 
@@ -163,18 +163,18 @@ export const calculateSchemaDirections = (
     } else if (schema.kind === "ref") {
       // For refs, extract the schema name and try to find the prefixed version
       const refName = schema.$ref.replace(/^#\/components\/schemas\//, "");
-      
+
       // Try both namespace prefixes since all schemas are now prefixed
       const ttsKey = `tts:${refName}`;
       const eviKey = `evi:${refName}`;
-      
+
       let schemaKey = refName; // fallback to original name
       if (allSchemas[ttsKey]) {
         schemaKey = ttsKey;
       } else if (allSchemas[eviKey]) {
         schemaKey = eviKey;
       }
-      
+
       const existing = initialDirections.get(schemaKey);
       if (existing && existing !== direction) {
         initialDirections.set(schemaKey, "both");
@@ -256,9 +256,11 @@ export const calculateSchemaDirections = (
   }
 
   // Propagate directions through the reference graph
-  const propagatedDirections = propagateDirection(referenceGraph, initialDirections, allSchemas);
-
-
+  const propagatedDirections = propagateDirection(
+    referenceGraph,
+    initialDirections,
+    allSchemas,
+  );
 
   // Set "orphaned" for any schemas that weren't reached
   for (const schemaKey of Object.keys(allSchemas)) {
@@ -268,4 +270,4 @@ export const calculateSchemaDirections = (
   }
 
   return propagatedDirections;
-}; 
+};

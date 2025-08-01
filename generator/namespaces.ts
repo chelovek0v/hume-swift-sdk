@@ -1,7 +1,9 @@
 import * as OA from "./parse_openapi";
 import type { Endpoint } from "./generator";
 
-const exhaustive = (x: never): any => x;
+const exhaustive = (x: never): any => {
+  throw new Error(`Unexpected object: ${x}`);
+};
 
 export type Namespace = "tts" | "empathicVoice";
 
@@ -88,4 +90,4 @@ export const calculateSchemaNamespaces = (
     });
   }
   return ret;
-}; 
+};
