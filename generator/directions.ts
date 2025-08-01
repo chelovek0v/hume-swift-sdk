@@ -1,15 +1,12 @@
+// Every datatype defined in the spec is sent, received, either, or it is orphaned (and should be omitted from the client.
+
+// This file just contains the logic to walk the OpenAPI and AsyncAPI specs to determine this direction of each schema.
+
 import * as OA from "./parse_openapi";
 import type { JsonSchema } from "./parse_openapi";
-import type { Namespace } from "./generator";
+import type { Endpoint } from "./generator";
 
 export type Direction = "sent" | "received" | "both" | "orphaned";
-
-export type Endpoint = {
-  path: string;
-  verb: "get" | "post" | "put" | "patch" | "delete";
-  namespace: Namespace;
-  operation: OA.OpenAPIOperation;
-};
 
 const exhaustive = (x: never): any => x;
 

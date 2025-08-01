@@ -1,17 +1,14 @@
 import * as OA from "./parse_openapi";
-import type { Endpoint } from "./directions";
-import type { Namespace } from "./generator";
+import type { Endpoint } from "./generator";
 
 const exhaustive = (x: never): any => x;
 
+export type Namespace = "tts" | "empathicVoice";
+
 export const getNamespace = (path: string): Namespace => {
   if (path.startsWith("/v0/evi")) return "empathicVoice";
-  if (path.startsWith("/v0/assistant")) return "empathicVoice"; // Map assistant paths to empathicVoice namespace
   if (path.startsWith("/v0/tts")) return "tts";
-  if (path.startsWith("/chat_audio_reconstructions")) return "empathicVoice"; // Additional path mapping
-
-  // Default to empathicVoice for any other paths that might be unrecognized
-  return "empathicVoice";
+  throw new Error(`Unknown namespace for path: ${path}`);
 };
 
 export const calculateSchemaNamespaces = (
@@ -26,11 +23,9 @@ export const calculateSchemaNamespaces = (
     }
   };
 
-  // All 'channels' get 'empathicVoice' namespace.
   const channelNamespace = "empathicVoice";
   for (const channelPath in allChannels) {
     const channel = allChannels[channelPath];
-    // Publish messages are sent by client
     OA.walkAsyncAPIMessage(
       channel.publish.message,
       (m) => {
@@ -40,7 +35,6 @@ export const calculateSchemaNamespaces = (
       },
       allMessages,
     );
-    // Subscribe messages are received by client
     OA.walkAsyncAPIMessage(
       channel.subscribe.message,
       (m) => {
@@ -52,7 +46,6 @@ export const calculateSchemaNamespaces = (
     );
   }
 
-  // All 'schema' objects within each channel, too.
   OA.walkObject(allChannels, (obj) => {
     if (obj && typeof obj === "object" && "kind" in obj) {
       const { data, success } = OA.JsonSchema_.safeParse(obj);
