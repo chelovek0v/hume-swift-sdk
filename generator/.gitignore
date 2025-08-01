@@ -1,6 +1,8 @@
 # Put a symbolic link to the apis/ folder in fern-config here:
 apis
-# Based on https://raw.githubusercontent.com/github/gitignore/main/Node.gitignore
+
+# No need to commit the lockfile
+bun.lock
 
 # Logs
 
