@@ -17,6 +17,8 @@ public class VoiceProvider: VoiceProvidable {
   private var audioHub: AudioHub = AudioHubImpl()
   private var audioHubStateCancellable: AnyCancellable?
 
+  private var connectionContinuation: CheckedContinuation<(), any Error>?
+
   public weak var delegate: (any VoiceProviderDelegate)?
 
   // MARK: - Metering
@@ -97,19 +99,10 @@ public class VoiceProvider: VoiceProvidable {
                   try await self.sendSessionSettings(
                     message: defaultedSessionSettings ?? sessionSettings)
 
-                  Logger.info("Waiting for audio hub to be ready")
-                  try await self.audioHub.state.waitFor(.running)
-
-                  Logger.info("Finalizing audio hub configuration")
-                  self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
-                  self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
-                  self.stateSubject.send(.connected)
-                  self.delegateQueue.async {
-                    self.delegate?.voiceProviderDidConnect(self)
-                  }
-                  continuation.resume()
-                  Logger.info("Voice Provider connected successfully")
+                  Logger.info("Waiting to receive chat metadata to finalize AudioHub")
+                  self.connectionContinuation = continuation
                 } catch {
+                  self.stateSubject.send(.disconnected)
                   continuation.resume(throwing: error)
                 }
               }
@@ -126,6 +119,32 @@ public class VoiceProvider: VoiceProvidable {
           )
       }
     }
+  }
+
+  private func completeConnectionSetup(error: Error? = nil) {
+    guard let connectionContinuation else {
+      Logger.error("missing connection continuation")
+      Task { await self.disconnect() }
+      return
+    }
+
+    if let error {
+      Task {
+        await self.disconnect()
+        connectionContinuation.resume(throwing: error)
+      }
+    } else {
+      Logger.info("Finalizing audio hub configuration")
+      self.audioHub.isOutputMeteringEnabled = self.isOutputMeteringEnabled
+      self.audioHub.outputMeterListener = self.handleOutputMeter(_:)
+      self.stateSubject.send(.connected)
+      self.delegateQueue.async {
+        self.delegate?.voiceProviderDidConnect(self)
+      }
+      connectionContinuation.resume()
+      Logger.info("Voice Provider connected successfully")
+    }
+    self.connectionContinuation = nil
   }
 
   public func disconnect() async {
@@ -211,23 +230,9 @@ extension VoiceProvider {
               Logger.error("Error receiving messages: \(error). Disconnecting...")
               Task { await self.disconnect() }
             case .closed, .disconnected:
-              Logger.warn(
-                "received closed or disconnected error while sending mic data, cleaning up")
-              // if the socket is closed or disconnected while we're attempting to send mic data, it means AudioHub didn't shut down correctly
-              try? await self.audioHub.stop()
-            case .connectionError, .transportError, .encodingError, .decodingError:
-              Logger.error("error sending mic data: \(error.rawValue), disconnecting...")
-              self.delegateQueue.async {
-                self.delegate?.voiceProvider(
-                  self, didProduceError: VoiceProviderError.socketSendError(error))
-              }
-              await self.disconnect()
-            }
-          } catch {
-            Logger.error("error sending mic data: \(error)")
-            self.delegateQueue.async {
-              self.delegate?.voiceProvider(
-                self, didProduceError: VoiceProviderError.socketSendError(error))
+              Logger.debug("Event subscription received \(error.rawValue) code.")
+            case .encodingError, .decodingError:
+              Logger.warn("Event subscription received \(error.rawValue) code")
             }
           } catch {
             Logger.error("Unknown error receiving messages: \(error). Disconnecting...")
@@ -274,7 +279,12 @@ extension VoiceProvider {
         Chat Group ID: \(response.chatGroupId)
         """)
       Task {
-        try? await self.audioHub.start()
+        do {
+          try await self.audioHub.start()
+          completeConnectionSetup()
+        } catch {
+          completeConnectionSetup(error: error)
+        }
       }
     case .webSocketError(let error):
       if error.slug == "inactivity_timeout" {
@@ -315,7 +325,7 @@ extension VoiceProvider {
       case .closed, .disconnected:
         Logger.warn("received closed or disconnected error while sending mic data, cleaning up")
         // if the socket is closed or disconnected while we're attempting to send mic data, it means AudioHub didn't
-        break
+        try? await self.audioHub.stop()
       case .connectionError, .transportError, .encodingError, .decodingError:
         Logger.error("error sending mic data: \(error.rawValue), disconnecting...")
         delegateQueue.async {
