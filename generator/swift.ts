@@ -278,12 +278,12 @@ export const renderSwiftStruct = (struct: SwiftStruct) => {
     (p) => p.constValue === undefined,
   );
 
-  const initParameters = settableProperties
-    .map((prop) => {
+  const initParameters = formatParameters(
+    settableProperties.map((prop) => {
       const typeString = renderSwiftType(prop.type);
       return `${prop.name}: ${typeString}`;
     })
-    .join(", ");
+  );
 
   const initAssignments = settableProperties
     .map((prop) => `    self.${prop.name} = ${prop.name}`)
@@ -507,6 +507,14 @@ export const renderSwiftDefinition = (
   throw new Error(`Unhandled Swift definition type: ${(def as any).type}`);
 };
 
+// Helper function to format parameters with one per line when there are multiple
+const formatParameters = (params: string[]): string => {
+  if (params.length <= 1) {
+    return params.join(", ");
+  }
+  return params.join(",\n    ");
+};
+
 export const renderSDKMethod = (method: SDKMethod): string => {
   const methodName = method.name;
   
@@ -527,7 +535,7 @@ export const renderSDKMethod = (method: SDKMethod): string => {
     "maxRetries: Int = 0"
   ];
   
-  const renderedParams = defaultParams.join(", ");
+  const renderedParams = formatParameters(defaultParams);
   
   // Determine if this is a streaming method
   const isDataReturn = method.returnType.type === "Data";
@@ -611,12 +619,16 @@ export const renderResourceClient = (
 
     
     if (isStreaming) {
+      const endpointParams = [
+        ...method.parameters.map(p => `${p.name}: ${renderSwiftType(p.type)}`),
+        "timeoutDuration: TimeInterval",
+        "maxRetries: Int"
+      ];
+      
       return `
 extension Endpoint where Response == ${responseType} {
   fileprivate static func ${endpointMethodName}(
-    ${method.parameters.map(p => `${p.name}: ${renderSwiftType(p.type)}`).join(", ")},
-    timeoutDuration: TimeInterval,
-    maxRetries: Int
+    ${formatParameters(endpointParams)}
   ) -> Endpoint<${responseType}> {
     return Endpoint(
       path: "${method.path}",
@@ -630,12 +642,16 @@ extension Endpoint where Response == ${responseType} {
   }
 }`;
     } else {
+      const endpointParams = [
+        ...method.parameters.map(p => `${p.name}: ${renderSwiftType(p.type)}`),
+        "timeoutDuration: TimeInterval",
+        "maxRetries: Int"
+      ];
+      
       return `
 extension Endpoint where Response == ${responseType} {
   fileprivate static func ${endpointMethodName}(
-    ${method.parameters.map(p => `${p.name}: ${renderSwiftType(p.type)}`).join(", ")},
-    timeoutDuration: TimeInterval,
-    maxRetries: Int
+    ${formatParameters(endpointParams)}
   ) -> Endpoint<${responseType}> {
     Endpoint(
       path: "${method.path}",
