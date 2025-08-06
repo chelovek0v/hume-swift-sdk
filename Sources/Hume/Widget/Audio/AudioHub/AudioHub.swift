@@ -144,7 +144,7 @@ public class AudioHubImpl: AudioHub {
       throw error
     }
 
-    await stateSubject.send(.stopped)
+      await stateSubject.send(.stopped)
     Logger.info("AudioHub state: stopped")
   }
 
@@ -208,14 +208,10 @@ public class AudioHubImpl: AudioHub {
     Logger.info("Stopping AudioHub")
     let state = await stateSubject.value
     switch state {
-    case .starting:
-      Logger.warn("audio hub was starting, waiting to finish")
-      try await stateSubject.waitFor(.running)
-    case .stopped, .stopping, .unconfigured, .configuring:
-      Logger.warn("attempted to stop audio hub from \(state) state")
-      return
-    case .running:
-      break
+        case .starting:
+            Logger.warn("audio hub was starting, waiting to finish")
+            try await stateSubject.waitFor(.running)
+        default: break
     }
 
     await stateSubject.send(.stopping)
@@ -229,6 +225,15 @@ public class AudioHubImpl: AudioHub {
       Logger.debug("Stopping audio engine")
       audioEngine.stop()
     }
+      
+      try? audioSession.stop()
+      disconnectAudioGraph()
+      
+      microphone = nil
+      inputNode = nil
+      
+      // Reset configuration
+      activeConfig = nil
 
     await stateSubject.send(.stopped)
     Logger.info("AudioHub state: stopped")

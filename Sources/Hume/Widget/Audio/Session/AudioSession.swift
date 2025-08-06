@@ -29,10 +29,18 @@ class AudioSession {
     try handleAudioRouting()
   }
 
-  func stop() throws {
-    Logger.info("Stopping audio session")
-    try audioSession.setActive(false, options: [.notifyOthersOnDeactivation])
-  }
+    func stop() throws
+    {
+        Logger.info("Stopping audio session")
+        
+        try audioSession.setActive(false, options: [.notifyOthersOnDeactivation])
+        
+        unregisterAVObservers()
+        
+        activeConfig = nil
+        lastInputPort = nil
+        isDeviceSpeakerActive = false
+    }
 
   // MARK: Configuring
   func configure(with configuration: AudioHubConfiguration) throws {
@@ -95,7 +103,8 @@ class AudioSession {
     NotificationCenter.default.removeObserver(self)
     observersRegistered = false
   }
-
+    
+    
   // MARK: - Audio Routing
   private func overrideReceiverIfNeeded(ioConfig: AudioSessionIO) throws {
     let defaultToSpeaker = activeConfig?.options.contains(.defaultToSpeaker) ?? false

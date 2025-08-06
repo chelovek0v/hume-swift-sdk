@@ -160,7 +160,7 @@ public class VoiceProvider: VoiceProvidable {
     Logger.info("Disconnecting voice provider")
 
     do {
-      try await self.audioHub.stop()
+        try await self.audioHub.stop()
     } catch {
       Logger.error("Failed to stop audio hub: \(error)")
     }
