@@ -207,13 +207,18 @@ public class AudioHubImpl: AudioHub {
   public func stop() async throws {
     Logger.info("Stopping AudioHub")
     let state = await stateSubject.value
-    switch state {
-        case .starting:
-            Logger.warn("audio hub was starting, waiting to finish")
-            try await stateSubject.waitFor(.running)
-        default: break
-    }
-
+      
+      switch state {
+          case .starting:
+              Logger.warn("audio hub was starting, waiting to finish")
+              try await stateSubject.waitFor(.running)
+          case .stopped, .stopping, .unconfigured, .configuring:
+              Logger.warn("attempted to stop audio hub from \(state) state")
+              return
+          case .running:
+              break
+      }
+      
     await stateSubject.send(.stopping)
     Logger.info("AudioHub state: stopping")
 
