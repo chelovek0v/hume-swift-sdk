@@ -6,12 +6,11 @@ protocol AudioSessionDelegate: AnyObject {
   func audioEngineDidChangeConfiguration()
 }
 
-class AudioSession {
+public class AudioSession {
   private let audioSession = AVAudioSession.sharedInstance()
   internal var lastInputPort: AVAudioSessionPortDescription?
 
-  static let shared = AudioSession()
-
+  public static let shared = AudioSession()
   private var activeConfig: AudioHubConfiguration? = nil
 
   @Published var isDeviceSpeakerActive: Bool = false
@@ -28,8 +27,9 @@ class AudioSession {
     try audioSession.setActive(true)
     try handleAudioRouting()
   }
+   
 
-    func stop() throws
+    public func stop() throws
     {
         Logger.info("Stopping audio session")
         
