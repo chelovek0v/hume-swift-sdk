@@ -14,7 +14,7 @@ public class VoiceProvider: VoiceProvidable {
     label: "\(Constants.Namespace).delegate.queue", qos: .userInteractive)
   private var eventSubscription: Task<(), any Error>?
 
-  private var audioHub: AudioHub = AudioHubImpl()
+  public var audioHub: AudioHub = AudioHubImpl()
   private var audioHubStateCancellable: AnyCancellable?
 
   private var connectionContinuation: CheckedContinuation<(), any Error>?

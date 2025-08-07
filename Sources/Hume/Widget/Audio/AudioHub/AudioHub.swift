@@ -38,7 +38,11 @@ public protocol AudioHub {
   func stop() async throws
 
   func handleInterruption()
-  func muteMic(_ mute: Bool)
+    func muteMic(_ mute: Bool)
+    
+    var audioEngine: AVAudioEngine { get }
+    var outputNode: AVAudioOutputNode! { get }
+    var mainMixer: AVAudioMixerNode! { get }
 }
 
 public protocol AudioHubDelegate {
@@ -47,13 +51,13 @@ public protocol AudioHubDelegate {
 
 public class AudioHubImpl: AudioHub {
   // MARK: Audio gear
-  internal let audioEngine = AVAudioEngine()
+  public let audioEngine = AVAudioEngine()
   private let audioSession = AudioSession.shared
   private var soundPlayer: SoundPlayer?
   private var microphone: Microphone!
   private var inputNode: AVAudioInputNode!
-  internal var mainMixer: AVAudioMixerNode!
-  private var outputNode: AVAudioOutputNode!
+  public var mainMixer: AVAudioMixerNode!
+  public var outputNode: AVAudioOutputNode!
 
   public var microphoneMode: MicrophoneMode {
     return MicrophoneMode(
