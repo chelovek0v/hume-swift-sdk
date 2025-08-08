@@ -114,7 +114,20 @@ public class VoiceProvider: VoiceProvidable {
               }
             },
             onError: { error, response in
-              Logger.warn("Socket Errored: \(error). Response: \(String(describing: response))")
+                Logger.warn("Socket Errored: \(error). Response: \(String(describing: response))")
+                
+                let response = response as? HTTPURLResponse
+                if response?.statusCode == 401 {
+                    if (response?.allHeaderFields["Www-Authenticate"] as? String)?.contains("access_token_expired") == true {
+                        continuation.resume(throwing: VoiceProviderError.staleToken)
+                    }
+                    else {
+                        continuation.resume(throwing: VoiceProviderError.invalidToken)
+                    }
+                }
+                else {
+                    continuation.resume(throwing: error)
+                }
             }
           )
       }
@@ -343,3 +356,5 @@ extension VoiceProvider {
     }
   }
 }
+
+

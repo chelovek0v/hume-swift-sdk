@@ -29,6 +29,10 @@ public enum VoiceProviderError: Error {
   case socketConnectionFailure(Error)
   /// Invalid session settings provided.
   case invalidSessionSettings
+    
+  case staleToken
+  case invalidToken
+    
   /// An unknown error occurred.
   case unknown(Error)
 }
