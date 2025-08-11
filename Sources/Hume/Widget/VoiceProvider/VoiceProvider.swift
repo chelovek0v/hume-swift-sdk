@@ -117,6 +117,7 @@ public class VoiceProvider: VoiceProvidable {
                 Logger.warn("Socket Errored: \(error). Response: \(String(describing: response))")
                 
                 let response = response as? HTTPURLResponse
+                
                 if response?.statusCode == 401 {
                     if (response?.allHeaderFields["Www-Authenticate"] as? String)?.contains("access_token_expired") == true {
                         continuation.resume(throwing: VoiceProviderError.staleToken)
@@ -124,9 +125,6 @@ public class VoiceProvider: VoiceProvidable {
                     else {
                         continuation.resume(throwing: VoiceProviderError.invalidToken)
                     }
-                }
-                else {
-                    continuation.resume(throwing: error)
                 }
             }
           )
